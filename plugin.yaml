@@ -1,0 +1,4 @@
+name: pinned-folders
+version: "0.1.0"
+description: A Pinned tab in the Hermes Desktop sidebar that files pinned chats into nested, colored, drag-ordered folders.
+author: Jacob Hausler
