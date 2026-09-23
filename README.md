@@ -2,7 +2,15 @@
 
 A **Pinned** tab in the Hermes Desktop sidebar that files your pinned chats into folders, nested as deep as you like.
 
+![Pinned folders tab next to an open chat](docs/banner.png)
+
 Hermes shows pinned chats as one flat list. This plugin gives them their own tab next to **Sessions** and sorts them into folders you arrange yourself.
+
+| Right-click a folder | Right-click a chat (full build) | Filter |
+|---|---|---|
+| ![Folder menu with colors](docs/context-menu.png) | ![Chat menu](docs/chat-menu.png) | ![Filter box narrowing to one chat](docs/filter.png) |
+
+*The screenshots use demo chats in a separate test copy of the app. The collapsed **Research** folder shows the activity badge: an accent dot while an agent works inside, and a green count of unread chats.*
 
 ## Features
 
