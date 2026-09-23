@@ -79,6 +79,8 @@ hermes plugins validate .       # catalog admission checks
 
 The plugin is plain ESM with `jsx()` calls and no build step, so the app loads the file as-is.
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) to send a change. Coding agents should start at [AGENTS.md](AGENTS.md).
+
 ## License
 
 MIT
