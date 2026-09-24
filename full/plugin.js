@@ -19,9 +19,13 @@
  */
 
 import {
+  // #full
+  ackStoredSessionId,
+  // #end
   Button,
   Codicon,
   ColorSwatches,
+  ConfirmDialog,
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
@@ -352,7 +356,10 @@ function pingCoreSessions() {
   } catch {}
 }
 
-async function unpinRow(row) {
+// The same PATCH core's own row menu sends (api/sessions.ts): title, pinned,
+// unread, archived. The owning profile travels in the body so the write lands
+// in that profile's state.db.
+async function patchSession(row, body) {
   const bridge = window.hermesDesktop
   if (!bridge?.api) throw new Error('This Desktop build has no API bridge')
   const connectionId = host.activeConnectionId?.() || null
@@ -362,8 +369,13 @@ async function unpinRow(row) {
     ...(profile ? { profile } : {}),
     path: '/api/sessions/' + encodeURIComponent(row.id),
     method: 'PATCH',
-    body: { pinned: false, ...(profile ? { profile } : {}) }
+    body: { ...body, ...(profile ? { profile } : {}) }
   })
+  pingCoreSessions()
+}
+
+async function unpinRow(row) {
+  await patchSession(row, { pinned: false })
   const now = Date.now()
   for (const id of pinIdsOf(row)) tombstones.set(id, now)
   scrubTombstones()
@@ -510,8 +522,11 @@ function usePinnedRows(scope) {
 
   const dropRow = id =>
     setState(prev => ({ ...prev, rows: prev.rows ? prev.rows.filter(r => r.id !== id) : prev.rows }))
+  // Optimistic edit (rename, read state); the next poll brings the truth.
+  const patchRow = (id, fields) =>
+    setState(prev => ({ ...prev, rows: prev.rows ? prev.rows.map(r => (r.id === id ? { ...r, ...fields } : r)) : prev.rows }))
 
-  return { ...state, dropRow, refresh: () => refresh.current() }
+  return { ...state, dropRow, patchRow, refresh: () => refresh.current() }
 }
 
 // #full
@@ -777,7 +792,8 @@ function PinnedPane() {
   }, [key])
   const setTree = fn => mutateTree(key, fn)
 
-  const { rows, error, dropRow, refresh: refreshRows } = usePinnedRows(key)
+  const { rows, error, dropRow, patchRow, refresh: refreshRows } = usePinnedRows(key)
+  const [deleting, setDeleting] = useState(null) // chat row awaiting the delete confirm
   useEffect(() => onBus(ev => ev.type === 'rows' && refreshRows()), [key])
   const [editing, setEditing] = useState(null)
   // #full
@@ -856,6 +872,56 @@ function PinnedPane() {
     host
       .openSession(row.id, { profile: row.profile || undefined, ...(intent ? { intent } : {}) })
       .catch(err => host.notifyError(err, 'Could not open that chat'))
+
+  const copyId = async row => {
+    const ok = await (os?.writeClipboard(row.id) ?? Promise.resolve(false))
+    host.notify(ok ? { kind: 'success', message: 'Session ID copied', durationMs: 2000 } : { kind: 'error', message: 'The clipboard is not available here.' })
+  }
+
+  // session.delete is the gateway's own RPC (SDK: host.request). It refuses a
+  // chat that is live in this app, and says so.
+  const deleteRow = async row => {
+    await host.request('session.delete', { session_id: row.id, ...(row.profile ? { profile: row.profile } : {}) })
+    dropRow(row.id)
+    setTree(t => ops.forgetSession(t, row.id))
+    host.notify({ kind: 'success', message: 'Chat deleted', durationMs: 2000 })
+    // #full
+    pingCoreSessions()
+    // #end
+  }
+
+  // #full
+  const renameRow = (row, title) => {
+    const next = String(title || '').trim()
+    if (!next || next === row.title) return
+    patchRow(row.id, { title: next })
+    patchSession(row, { title: next }).catch(err => {
+      host.notifyError(err, 'Could not rename that chat')
+      refreshRows()
+    })
+  }
+
+  const toggleRead = row => {
+    const unread = !row.unread
+    patchRow(row.id, { unread })
+    if (!unread) ackStoredSessionId(row.id, row.profile)
+    patchSession(row, { unread }).catch(err => {
+      host.notifyError(err, unread ? 'Could not mark that chat unread' : 'Could not mark that chat read')
+      refreshRows()
+    })
+  }
+
+  const archiveRow = row => {
+    dropRow(row.id)
+    setTree(t => ops.forgetSession(t, row.id))
+    patchSession(row, { archived: true })
+      .then(() => host.notify({ kind: 'success', message: 'Chat archived', durationMs: 2000 }))
+      .catch(err => {
+        host.notifyError(err, 'Could not archive that chat')
+        refreshRows()
+      })
+  }
+  // #end
 
   // Every chat beneath a folder, in display order (its own, then subfolders').
   const chatsBeneath = fid => [
@@ -997,6 +1063,13 @@ function PinnedPane() {
     const items = [
       { label: 'Open', icon: 'go-to-file', onSelect: () => openRow(row) },
       { label: 'Open in new tab', icon: 'split-horizontal', onSelect: () => openRow(row, 'tab') },
+      { label: 'Open in new window', icon: 'link-external', onSelect: () => openRow(row, 'window') },
+      '-',
+      // #full
+      { label: 'Rename', icon: 'edit', onSelect: () => setEditing('s:' + row.id) },
+      { label: row.unread ? 'Mark as read' : 'Mark as unread', icon: row.unread ? 'mail-read' : 'mail', onSelect: () => toggleRead(row) },
+      // #end
+      { label: 'Copy session ID', icon: 'copy', onSelect: () => copyId(row) },
       '-',
       { header: 'Move to' },
       { label: 'Unsorted', icon: 'inbox', disabled: fid === ROOT, onSelect: () => setTree(t => ops.placeSession(t, row.id, ROOT)) },
@@ -1020,10 +1093,14 @@ function PinnedPane() {
             refreshRows()
           })
         }
-      }
+      },
+      { label: 'Archive', icon: 'archive', onSelect: () => archiveRow(row) },
       // #end
+      '-',
+      { label: 'Delete…', icon: 'trash', destructive: true, onSelect: () => setDeleting(row) }
     ]
     const active = focused && focused === row.id
+    const renaming = editing === 's:' + row.id
     const el = jsxs(
       'div',
       {
@@ -1039,17 +1116,37 @@ function PinnedPane() {
           ...(dropAt === 's:' + row.id ? { boxShadow: 'inset 0 2px 0 var(--theme-primary)' } : null)
         }),
         title: row.title || row.preview || row.id,
-        onClick: e => openRow(row, e.metaKey || e.ctrlKey ? 'tab' : undefined),
+        onClick: e => !renaming && openRow(row, e.metaKey || e.ctrlKey ? 'tab' : undefined),
+        // #full
+        onDoubleClick: e => {
+          e.stopPropagation()
+          setEditing('s:' + row.id)
+        },
+        // #end
         children: [
           jsx(SidebarRowLead, { children: jsx(SessionStatusDot, { storedSessionId: row.id, session: row }) }, 'dot'),
-          jsx(
-            'span',
-            {
-              style: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-              children: row.title || row.preview || 'Untitled'
-            },
-            'title'
-          ),
+          renaming
+            ? jsx(
+                NameInput,
+                {
+                  initial: row.title || '',
+                  onDone: value => {
+                    setEditing(null)
+                    // #full
+                    if (value != null) renameRow(row, value)
+                    // #end
+                  }
+                },
+                'edit'
+              )
+            : jsx(
+                'span',
+                {
+                  style: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+                  children: row.title || row.preview || 'Untitled'
+                },
+                'title'
+              ),
           jsx(RowMenu, { items }, 'menu')
         ]
       }
@@ -1266,7 +1363,20 @@ function PinnedPane() {
         },
         'list'
       ),
-      jsx(ImportDialog, { open: importing, onOpenChange: setImporting, onImport: next => mutateTree(key, () => next) }, 'import')
+      jsx(ImportDialog, { open: importing, onOpenChange: setImporting, onImport: next => mutateTree(key, () => next) }, 'import'),
+      jsx(
+        ConfirmDialog,
+        {
+          open: deleting != null,
+          onClose: () => setDeleting(null),
+          onConfirm: () => deleteRow(deleting),
+          title: 'Delete this chat?',
+          description: `"${deleting?.title || deleting?.preview || 'Untitled'}" and its whole transcript are deleted for good. This can't be undone.`,
+          confirmLabel: 'Delete',
+          destructive: true
+        },
+        'delete'
+      )
     ]
   })
 }

@@ -22,6 +22,7 @@ import {
   Button,
   Codicon,
   ColorSwatches,
+  ConfirmDialog,
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
@@ -335,8 +336,11 @@ function usePinnedRows(scope) {
 
   const dropRow = id =>
     setState(prev => ({ ...prev, rows: prev.rows ? prev.rows.filter(r => r.id !== id) : prev.rows }))
+  // Optimistic edit (rename, read state); the next poll brings the truth.
+  const patchRow = (id, fields) =>
+    setState(prev => ({ ...prev, rows: prev.rows ? prev.rows.map(r => (r.id === id ? { ...r, ...fields } : r)) : prev.rows }))
 
-  return { ...state, dropRow, refresh: () => refresh.current() }
+  return { ...state, dropRow, patchRow, refresh: () => refresh.current() }
 }
 
 // ── UI ───────────────────────────────────────────────────────────────────────
@@ -550,7 +554,8 @@ function PinnedPane() {
   }, [key])
   const setTree = fn => mutateTree(key, fn)
 
-  const { rows, error, dropRow, refresh: refreshRows } = usePinnedRows(key)
+  const { rows, error, dropRow, patchRow, refresh: refreshRows } = usePinnedRows(key)
+  const [deleting, setDeleting] = useState(null) // chat row awaiting the delete confirm
   useEffect(() => onBus(ev => ev.type === 'rows' && refreshRows()), [key])
   const [editing, setEditing] = useState(null)
   const [dropAt, setDropAt] = useState(null)
@@ -620,6 +625,20 @@ function PinnedPane() {
     host
       .openSession(row.id, { profile: row.profile || undefined, ...(intent ? { intent } : {}) })
       .catch(err => host.notifyError(err, 'Could not open that chat'))
+
+  const copyId = async row => {
+    const ok = await (os?.writeClipboard(row.id) ?? Promise.resolve(false))
+    host.notify(ok ? { kind: 'success', message: 'Session ID copied', durationMs: 2000 } : { kind: 'error', message: 'The clipboard is not available here.' })
+  }
+
+  // session.delete is the gateway's own RPC (SDK: host.request). It refuses a
+  // chat that is live in this app, and says so.
+  const deleteRow = async row => {
+    await host.request('session.delete', { session_id: row.id, ...(row.profile ? { profile: row.profile } : {}) })
+    dropRow(row.id)
+    setTree(t => ops.forgetSession(t, row.id))
+    host.notify({ kind: 'success', message: 'Chat deleted', durationMs: 2000 })
+  }
 
   // Every chat beneath a folder, in display order (its own, then subfolders').
   const chatsBeneath = fid => [
@@ -752,6 +771,9 @@ function PinnedPane() {
     const items = [
       { label: 'Open', icon: 'go-to-file', onSelect: () => openRow(row) },
       { label: 'Open in new tab', icon: 'split-horizontal', onSelect: () => openRow(row, 'tab') },
+      { label: 'Open in new window', icon: 'link-external', onSelect: () => openRow(row, 'window') },
+      '-',
+      { label: 'Copy session ID', icon: 'copy', onSelect: () => copyId(row) },
       '-',
       { header: 'Move to' },
       { label: 'Unsorted', icon: 'inbox', disabled: fid === ROOT, onSelect: () => setTree(t => ops.placeSession(t, row.id, ROOT)) },
@@ -762,8 +784,11 @@ function PinnedPane() {
         disabled: f.id === fid,
         onSelect: () => setTree(t => ops.placeSession(t, row.id, f.id))
       })),
+      '-',
+      { label: 'Delete…', icon: 'trash', destructive: true, onSelect: () => setDeleting(row) }
     ]
     const active = focused && focused === row.id
+    const renaming = editing === 's:' + row.id
     const el = jsxs(
       'div',
       {
@@ -779,17 +804,28 @@ function PinnedPane() {
           ...(dropAt === 's:' + row.id ? { boxShadow: 'inset 0 2px 0 var(--theme-primary)' } : null)
         }),
         title: row.title || row.preview || row.id,
-        onClick: e => openRow(row, e.metaKey || e.ctrlKey ? 'tab' : undefined),
+        onClick: e => !renaming && openRow(row, e.metaKey || e.ctrlKey ? 'tab' : undefined),
         children: [
           jsx(SidebarRowLead, { children: jsx(SessionStatusDot, { storedSessionId: row.id, session: row }) }, 'dot'),
-          jsx(
-            'span',
-            {
-              style: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-              children: row.title || row.preview || 'Untitled'
-            },
-            'title'
-          ),
+          renaming
+            ? jsx(
+                NameInput,
+                {
+                  initial: row.title || '',
+                  onDone: value => {
+                    setEditing(null)
+                  }
+                },
+                'edit'
+              )
+            : jsx(
+                'span',
+                {
+                  style: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+                  children: row.title || row.preview || 'Untitled'
+                },
+                'title'
+              ),
           jsx(RowMenu, { items }, 'menu')
         ]
       }
@@ -992,7 +1028,20 @@ function PinnedPane() {
         },
         'list'
       ),
-      jsx(ImportDialog, { open: importing, onOpenChange: setImporting, onImport: next => mutateTree(key, () => next) }, 'import')
+      jsx(ImportDialog, { open: importing, onOpenChange: setImporting, onImport: next => mutateTree(key, () => next) }, 'import'),
+      jsx(
+        ConfirmDialog,
+        {
+          open: deleting != null,
+          onClose: () => setDeleting(null),
+          onConfirm: () => deleteRow(deleting),
+          title: 'Delete this chat?',
+          description: `"${deleting?.title || deleting?.preview || 'Untitled'}" and its whole transcript are deleted for good. This can't be undone.`,
+          confirmLabel: 'Delete',
+          destructive: true
+        },
+        'delete'
+      )
     ]
   })
 }
