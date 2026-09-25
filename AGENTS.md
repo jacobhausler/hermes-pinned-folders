@@ -26,6 +26,17 @@ hermes plugins validate .       # → "Validation passed." (catalog admission; n
 
 A change is done when all four pass and `git diff desktop/plugin.js` shows only what the build wrote.
 
+## Code graph (optional)
+
+[graphify](https://github.com/Graphify-Labs/graphify) turns the repo into a queryable graph. It uses a local parse, no LLM and no API key, and needs [uv](https://docs.astral.sh/uv/):
+
+```sh
+uvx --from graphifyy graphify update .         # → "Rebuilt: ~100 nodes, ~160 edges", about 2 s
+uvx --from graphifyy graphify query "how does unpin work"
+```
+
+Read `graphify-out/GRAPH_REPORT.md` for the hubs and communities. `graphify-out/` is git-ignored: rebuild it after pulling instead of trusting a stale copy. `.graphifyignore` leaves out the generated `desktop/plugin.js` and the screenshots.
+
 ## Rules
 
 1. **The catalog build uses only the plugin SDK.** Imports come from `@hermes/plugin-sdk`, `react` and `react/jsx-runtime`. Anything that reaches past the SDK goes inside a `// #full` … `// #end` block: `window.hermesDesktop`, `localStorage`, `document`, or core's own storage keys. `node tests/ops.test.mjs` enforces this ("catalog build stays inside the SDK"). `hermes plugins validate .` does not: it only checks prototype patching, `eval`, dynamic `import()` and script tags.
