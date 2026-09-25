@@ -108,7 +108,8 @@ jobs:
       - name: Knowledge graph matches the tree
         if: steps.cls.outputs.docs_only == 'false' && steps.cls.outputs.has_graph == 'true'
         run: |
-          pip install --quiet graphifyy
+          pip install --quiet "graphifyy==$(cat graphify-out/VERSION 2>/dev/null || echo 0.9.67)"
+          graphify --version
           python3 scripts/graph_check.py
 
       - name: Validate against pinned hermes-agent
