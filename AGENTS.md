@@ -21,14 +21,14 @@ Node 22 or newer. Nothing to install.
 node scripts/build.mjs          # → built desktop/plugin.js
 node tests/ops.test.mjs         # catalog build → 34 "ok" lines, exit 0
 node tests/ops.test.mjs full    # full build   → 42 "ok" lines, exit 0
-hermes plugins validate .       # → "desktop surface — stays inside the plugin SDK surface", "Validation passed."
+hermes plugins validate .       # → "Validation passed." (catalog admission; not an SDK-only proof)
 ```
 
 A change is done when all four pass and `git diff desktop/plugin.js` shows only what the build wrote.
 
 ## Rules
 
-1. **The catalog build uses only the plugin SDK.** Imports come from `@hermes/plugin-sdk`, `react` and `react/jsx-runtime`. Anything that reaches past the SDK goes inside a `// #full` … `// #end` block: `window.hermesDesktop`, `localStorage`, `document`, or core's own storage keys. `hermes plugins validate .` enforces this.
+1. **The catalog build uses only the plugin SDK.** Imports come from `@hermes/plugin-sdk`, `react` and `react/jsx-runtime`. Anything that reaches past the SDK goes inside a `// #full` … `// #end` block: `window.hermesDesktop`, `localStorage`, `document`, or core's own storage keys. `node tests/ops.test.mjs` enforces this ("catalog build stays inside the SDK"). `hermes plugins validate .` does not: it only checks prototype patching, `eval`, dynamic `import()` and script tags.
 2. **No build step and no JSX.** Write `jsx()` / `jsxs()` calls. The app loads the file as-is.
 3. **Logic lives in exported pure functions, and the tests cover them:** `ops`, `normalize`, `folderActivity`, `filterView`, `exportLayout`, `importLayout`, and in the full build `scrubCorePins` and `isFreshUserChat`. React code stays thin. The test stubs every name the file imports from the SDK, so a new SDK import needs no test change.
 4. **Saved layouts never break.** Storage is `ctx.storage` (plugin-scoped). The layout lives at `tree.<connectionId|local>`:
