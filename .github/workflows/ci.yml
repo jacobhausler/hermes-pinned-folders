@@ -1,0 +1,116 @@
+# repo-admin standard CI. Reports ONE check, `gates`, which the protect-main ruleset
+# requires. Steps self-skip when their inputs are absent, so the same file serves a
+# Python+desktop plugin (hermes-workflows) and a desktop-only one (pinned-folders).
+# Nothing here can go red on a docs-only PR: markdown-only diffs short-circuit.
+#
+# Pushing this file needs a token with the `workflow` scope.
+# HERMES_PIN = 40-char commit of the MEASURED requires_hermes floor tag:
+#   git ls-remote https://github.com/NousResearch/hermes-agent 'refs/tags/<tag>^{}'
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+env:
+  HERMES_PIN: "345cd2b057a452236de401d3534b8502a7465e8d"   # v2026.9.14
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Classify diff (docs-only PRs skip everything)
+        id: cls
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE=$(git merge-base origin/${{ github.base_ref }} HEAD)
+            CHANGED=$(git diff --name-only "$BASE"...HEAD)
+          else
+            CHANGED=$(git ls-files)
+          fi
+          echo "$CHANGED"
+          if [ -n "$CHANGED" ] && ! echo "$CHANGED" | grep -qvE '\.(md|png|jpg|gif|svg)$|^docs/|^assets/'; then
+            echo "docs_only=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "has_py=$([ -n "$(git ls-files '*.py')" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "has_suite=$([ -f scripts/suite.py ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "has_scrub=$([ -f scripts/make_public.py ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "has_graph=$([ -f scripts/graph_check.py ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "has_build=$([ -f scripts/build.mjs ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "has_mjs_tests=$(ls tests/*.test.mjs >/dev/null 2>&1 && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v4
+        if: steps.cls.outputs.docs_only == 'false'
+        with:
+          node-version: "22"
+
+      - uses: actions/setup-python@v5
+        if: steps.cls.outputs.docs_only == 'false'
+        with:
+          python-version: "3.12"
+
+      # The floor contract, installed FIRST: tests that import real core (hermes_constants,
+      # the quiet-turn-report file, /opt/hermes shims) run against the pinned release, not
+      # a stub. `/opt/hermes` mirrors the seat layout some tests sys.path-insert.
+      - name: Install pinned hermes-agent (the measured floor)
+        if: steps.cls.outputs.docs_only == 'false'
+        run: |
+          git clone --filter=blob:none --quiet https://github.com/NousResearch/hermes-agent /tmp/hermes-agent
+          git -C /tmp/hermes-agent checkout --quiet "$HERMES_PIN"
+          pip install --quiet -e /tmp/hermes-agent
+          sudo ln -sfn /tmp/hermes-agent /opt/hermes
+          hermes --version
+
+      - name: Desktop half parses as ESM
+        if: steps.cls.outputs.docs_only == 'false'
+        run: cp desktop/plugin.js /tmp/plugin.check.mjs && node --check /tmp/plugin.check.mjs
+
+      - name: Generated desktop build is current
+        if: steps.cls.outputs.docs_only == 'false' && steps.cls.outputs.has_build == 'true'
+        run: node scripts/build.mjs && git diff --exit-code -- desktop/plugin.js
+
+      - name: Node tests
+        if: steps.cls.outputs.docs_only == 'false' && steps.cls.outputs.has_mjs_tests == 'true'
+        run: for t in tests/*.test.mjs; do node "$t"; node "$t" full 2>/dev/null || true; done
+
+      - name: Serial suite
+        if: steps.cls.outputs.docs_only == 'false' && steps.cls.outputs.has_suite == 'true'
+        run: python3 scripts/suite.py . ci-out   # exits 1 on any failing case
+
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.cls.outputs.has_suite == 'true'
+        with:
+          name: exits
+          path: ci-out/exits.json
+          if-no-files-found: ignore
+
+      - name: Private-string scrub
+        if: steps.cls.outputs.docs_only == 'false' && steps.cls.outputs.has_scrub == 'true'
+        run: python3 scripts/make_public.py /tmp/public-tree
+
+      - name: Knowledge graph matches the tree
+        if: steps.cls.outputs.docs_only == 'false' && steps.cls.outputs.has_graph == 'true'
+        run: |
+          pip install --quiet graphifyy
+          python3 scripts/graph_check.py
+
+      - name: Validate against pinned hermes-agent
+        if: steps.cls.outputs.docs_only == 'false'
+        run: hermes plugins validate .
