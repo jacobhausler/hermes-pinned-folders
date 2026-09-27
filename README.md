@@ -38,6 +38,8 @@ Hermes shows pinned chats as one flat list. This plugin gives them their own tab
 | **Auto-pin chats you start** (not agent, cron, or workflow sessions), with an optional "New chats land here" folder | – | ✓ |
 | **Hide core's flat Pinned list** in Sessions | – | ✓ |
 
+If a new chat cannot be resolved or pinned within 60 seconds, the full build shows a notification. Pin it manually from Sessions, or check the connection and send another message to retry; a failed pin request does not mark the chat as already handled.
+
 The catalog build uses only the Hermes Desktop plugin SDK, which the [plugin catalog](https://github.com/NousResearch/hermes-agent/tree/main/plugin-catalog) requires.
 
 The SDK has no way to pin, unpin, rename, archive, or change a chat's read state, and no way to hide a core sidebar section, so the full build reaches past it for those features:
