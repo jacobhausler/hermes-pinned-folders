@@ -406,8 +406,8 @@ function mutateTree(key, fn) {
 // the focused chat's row. The chat is auto-pinned when it is a desktop chat
 // born while this app watched it: its started_at is not older than when the
 // chat first came into focus here. That excludes old chats you reopen. Every
-// chat is judged once (the ids are persisted), so unpinning an auto-pinned
-// chat is final.
+// chat is judged only after a successful pin (or a non-fresh verdict), so
+// unpinning an auto-pinned chat is final but failed PATCHes can retry.
 
 const firstSeen = new Map() // stored id -> ms first focused in this run
 const SEEN_SLACK_MS = 10_000
@@ -420,6 +420,13 @@ export function isFreshUserChat(row, seenAt) {
   if (row.parent_session_id) return false
   const born = (row.started_at || 0) * 1000
   return born >= seenAt - SEEN_SLACK_MS
+}
+
+export function autoPinNext(row, seenAt, judgedIds, now, deadline) {
+  if (now >= deadline) return 'timeout'
+  if (!row) return 'wait'
+  if (pinIdsOf(row).some(id => judgedIds.has(id))) return 'skip'
+  return isFreshUserChat(row, seenAt) ? 'pin' : 'skip'
 }
 
 function judged() {
@@ -447,18 +454,38 @@ async function pinRow(row) {
   pingCoreSessions() // core's pin-sync adopts server pins it hasn't seen
 }
 
+export async function pinAndJudge(row, pin = pinRow, judge = markJudged) {
+  await pin(row)
+  judge(pinIdsOf(row))
+}
+
 async function resolveAndAutoPin(idAtSend, sentAt) {
   const deadline = sentAt + RESOLVE_MS
-  while (Date.now() < deadline) {
+  let lastError = null
+  while (true) {
+    if (autoPinNext(null, sentAt, judged(), Date.now(), deadline) === 'timeout') {
+      if (lastError) console.error('[pinned-folders] auto-pin failed', lastError)
+      host.notify({ kind: 'error', title: 'Chat was not auto-pinned', message: 'Pin it from Sessions, or check the connection and send another message to retry.' })
+      return
+    }
     const id = idAtSend || host.state.focusedStoredSessionId.get()
     if (id) {
       if (judged().has(id)) return
       const res = await host.listPersistedSessions(null, { profile: 'all', limit: 100 }).catch(() => null)
       const row = (res?.sessions || []).find(s => s.id === id || s._lineage_root_id === id)
-      if (row) {
-        markJudged(pinIdsOf(row))
-        if (!isFreshUserChat(row, firstSeen.get(id) ?? sentAt)) return
-        await pinRow(row)
+      const next = autoPinNext(row, firstSeen.get(id) ?? sentAt, judged(), Date.now(), deadline)
+      if (next === 'skip') {
+        if (row) markJudged(pinIdsOf(row))
+        return
+      }
+      if (next === 'pin') {
+        try {
+          await pinAndJudge(row)
+        } catch (err) {
+          lastError = err // leave autoJudged untouched; retry until the deadline
+          await new Promise(r => setTimeout(r, RESOLVE_EVERY_MS))
+          continue
+        }
         const folder = store.get('autoFolder', null)
         const key = treeKey(host.state.connectionId.get())
         const ids = new Set(loadTree(key).folders.map(f => f.id))

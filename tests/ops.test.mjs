@@ -42,7 +42,7 @@ u = ops.forgetSession(u, 'x')
 assert(!('x' in u.placed) && !u.order.includes('x'), 'unpin forgets placement')
 
 if (FULL) {
-  const { scrubCorePins, isFreshUserChat } = mod
+  const { scrubCorePins, isFreshUserChat, autoPinNext, pinAndJudge } = mod
   const mem = new Map([
     ['hermes.desktop.pinnedSessions', JSON.stringify(['a', 'b'])],
     ['hermes.desktop.pinnedSessions.remote.https%3A%2F%2Fdesk', JSON.stringify(['b', 'c'])],
@@ -63,6 +63,23 @@ if (FULL) {
   assert(!isFreshUserChat({ source: 'desktop', started_at: sec, parent_session_id: 'p' }, now), 'subagent child does NOT auto-pin')
   assert(!isFreshUserChat({ source: 'desktop', started_at: sec, pinned: true }, now), 'already pinned is left alone')
   assert(!isFreshUserChat({ source: 'desktop', started_at: sec, hidden: 1 }, now), 'hidden (bot) chat does NOT auto-pin')
+  const fresh = { id: 'new', _lineage_root_id: 'root', source: 'desktop', started_at: sec }
+  const until = now + 60_000
+  assert(autoPinNext(fresh, now, new Set(), now, until) === 'pin', 'fresh chat requests a pin')
+  const judgedIds = new Set()
+  const mark = ids => ids.forEach(id => judgedIds.add(id))
+  let attempts = 0
+  const patch = async () => { if (++attempts === 1) throw new Error('PATCH failed') }
+  try { await pinAndJudge(fresh, patch, mark) } catch {}
+  assert(attempts === 1 && !judgedIds.size, 'failed PATCH cannot persist judged ids')
+  assert(autoPinNext(fresh, now, judgedIds, now + 2000, until) === 'pin', 'failed PATCH leaves chat eligible for retry')
+  await pinAndJudge(fresh, patch, mark)
+  assert(attempts === 2 && judgedIds.has('new') && judgedIds.has('root'), 'successful retry persists judged ids')
+  assert(autoPinNext(fresh, now, new Set(['root']), now + 2000, until) === 'skip', 'successful pin judges lineage')
+  assert(autoPinNext(null, now, new Set(), now, until) === 'wait', 'unresolved row waits before deadline')
+  assert(autoPinNext(null, now, new Set(), until, until) === 'timeout', 'unresolved row reports deadline')
+  assert(autoPinNext(fresh, now, new Set(), until, until) === 'timeout', 'failed PATCH reports deadline')
+  assert(autoPinNext({ ...fresh, started_at: sec - 3600 }, now, new Set(), now, until) === 'skip', 'old chat judged without pinning')
 } else {
   const leaks = ['hermesDesktop', 'localStorage', 'querySelector', 'MutationObserver', 'BroadcastChannel', 'composer.middleware', 'translateNow'].filter(w => src.includes(w))
   assert(!leaks.length, 'catalog build stays inside the SDK: ' + (leaks.join(', ') || 'no internals referenced'))
