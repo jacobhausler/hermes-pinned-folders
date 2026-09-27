@@ -1,0 +1,50 @@
+import { spawnSync } from 'node:child_process';
+import assert from 'node:assert/strict';
+import { mkdtemp, mkdir, readFile, symlink, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { install } from '../scripts/install-local.mjs';
+
+const repo = resolve(fileURLToPath(new URL('..', import.meta.url)));
+const home = await mkdtemp(join(tmpdir(), 'pf-install-'));
+const dir = join(home, 'desktop-plugins', 'pinned-folders');
+const dest = join(dir, 'plugin.js');
+const full = await readFile(join(repo, 'full/plugin.js'));
+const catalog = await readFile(join(repo, 'desktop/plugin.js'));
+try {
+  assert.notDeepEqual(full, catalog);
+  await assert.rejects(install({ home }), /Usage/);
+  await assert.rejects(install({ home, variant: 'other' }), /Usage/);
+  assert.equal((await install({ home, variant: 'full' })).status, 'installed');
+  assert.deepEqual(await readFile(dest), full);
+  assert.equal((await install({ home, variant: 'full' })).status, 'already current');
+  await assert.rejects(install({ home, variant: 'catalog' }), /--replace/);
+  assert.deepEqual(await readFile(dest), full);
+  assert.equal((await install({ home, variant: 'catalog', replace: true })).variant, 'catalog');
+  assert.deepEqual(await readFile(dest), catalog);
+  await writeFile(join(dir, '.hermes-package.json'), '{"package":"pinned-folders"}');
+  await assert.rejects(install({ home, variant: 'full', replace: true }), /managed install/);
+  assert.deepEqual(await readFile(dest), catalog);
+  await rm(join(dir, '.hermes-package.json'));
+  await writeFile(join(dir, '.hermes-catalog.json'), '{}');
+  await assert.rejects(install({ home, variant: 'full', replace: true }), /managed install/);
+  assert.deepEqual(await readFile(dest), catalog);
+  await rm(join(dir, '.hermes-catalog.json'));
+  await rm(dest);
+  await symlink(join(home, 'elsewhere'), dest);
+  await assert.rejects(install({ home, variant: 'full', replace: true }), /symlinked/);
+  await rm(dest);
+  await rm(dir, { recursive: true });
+  await mkdir(join(home, 'elsewhere'), { recursive: true });
+  await symlink(join(home, 'elsewhere'), dir);
+  await assert.rejects(install({ home, variant: 'full' }), /symlinked/);
+  const cliHome = join(home, 'cli-home');
+  const cli = spawnSync(process.execPath, [join(repo, 'scripts/install-local.mjs'), '--variant', 'full', '--home', cliHome], { encoding: 'utf8' });
+  assert.equal(cli.status, 0, cli.stderr);
+  assert.match(cli.stdout, /SHA-256 [0-9a-f]{64}/);
+  assert.deepEqual(await readFile(join(cliHome, 'desktop-plugins/pinned-folders/plugin.js')), full);
+  console.log('ok local installer selects and verifies both variants, refuses unsafe overwrites');
+} finally {
+  await rm(home, { recursive: true, force: true });
+}

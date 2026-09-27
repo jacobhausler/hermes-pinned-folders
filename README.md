@@ -60,15 +60,13 @@ Both builds come from `full/plugin.js`. `node scripts/build.mjs` writes the cata
 hermes plugins install pinned-folders
 ```
 
-**By hand** (either build): copy one file into the desktop plugins folder **on the machine that runs the Hermes Desktop app**:
+**Local full Desktop build** (clone this repo on the machine running the Desktop app):
 
 ```sh
-mkdir -p ~/.hermes/desktop-plugins/pinned-folders
-curl -fsSL https://raw.githubusercontent.com/jacobhausler/hermes-pinned-folders/main/full/plugin.js \
-  -o ~/.hermes/desktop-plugins/pinned-folders/plugin.js
+node scripts/install-local.mjs --variant full
 ```
 
-For the catalog build, use `desktop/plugin.js` in that URL instead.
+The installer requires an explicit `--variant full|catalog`, copies that build from this checkout into `~/.hermes/desktop-plugins/pinned-folders/plugin.js` (or `$HERMES_HOME/desktop-plugins/...`), and prints the verified destination SHA-256. Use `--variant catalog` only when you deliberately want the SDK-only build. An existing different local file needs `--replace`; a detectable Hermes-managed package is never overwritten, even with `--replace`. To use a different home for testing, pass `--home PATH`. Do not use this local installer to update a catalog-managed install; update it with Hermes instead.
 
 The app loads new plugins within a few seconds. If the tab doesn't appear, press ⌘K and run **Reload desktop plugins**.
 
