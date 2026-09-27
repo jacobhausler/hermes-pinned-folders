@@ -54,11 +54,13 @@ Read `graphify-out/GRAPH_REPORT.md` for the hubs and communities. `graphify-out/
 
 ## Try it live
 
-Copy the build into the plugins folder **on the machine that runs the Desktop app**:
+From this checkout on the machine that runs the Desktop app, explicitly select the full build:
 
 ```sh
-cp full/plugin.js ~/.hermes/desktop-plugins/pinned-folders/plugin.js
+node scripts/install-local.mjs --variant full
 ```
+
+The local installer verifies the destination bytes and refuses to overwrite a detectable Hermes-managed install. An existing different local file requires `--replace`; see README for the catalog alternative.
 
 Then run ⌘K → **Reload desktop plugins**. The PINNED tab sits next to SESSIONS and BOTS.
 
