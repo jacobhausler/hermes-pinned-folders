@@ -115,6 +115,12 @@ if (FULL) {
   const pinCalls = []
   await mod.unpinPinnedRow({ id: 's1' }, { sessions: { pin: (id, v) => pinCalls.push([id, v]) } })
   assert(pinCalls.length === 1 && pinCalls[0][0] === 's1' && pinCalls[0][1] === false, 'catalog unpin calls host.sessions.pin(id, false) exactly once')
+  let settled = false
+  await mod.unpinPinnedRow({ id: 's1' }, { sessions: { pin: () => new Promise(r => setTimeout(() => { settled = true; r() }, 5)) } })
+  assert(settled, 'catalog unpin awaits an async host.sessions.pin before resolving')
+  let asyncErr = ''
+  try { await mod.unpinPinnedRow({ id: 's1' }, { sessions: { pin: async () => { throw new Error('pin boom') } } }) } catch (e) { asyncErr = e.message }
+  assert(asyncErr === 'pin boom', 'catalog unpin surfaces an async pin rejection (menu keeps placement, calls notifyError)')
 
   // ── catalog unpin on older Desktop: guidance error, layout untouched ──
   let oldHostErr = ''

@@ -289,7 +289,7 @@ export async function unpinPinnedRow(row, sessionsHost = host) {
   // The SDK verb writes core's pin store; core syncs it to the backend.
   // Older Desktop versions lack the verb, so never fall through to internals.
   if (typeof sessionsHost.sessions?.pin !== 'function') throw new Error('Update Hermes Desktop, or unpin this chat in Sessions (⋯ → Unpin).')
-  sessionsHost.sessions.pin(row.id, false)
+  await sessionsHost.sessions.pin(row.id, false)
 }
 
 // ── shared tree state (pane + auto-pin write through one door) ───────────────
