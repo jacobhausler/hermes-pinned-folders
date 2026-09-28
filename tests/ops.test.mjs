@@ -234,3 +234,80 @@ const cyc = importLayout(JSON.stringify({ format: 'pinned-folders/layout@1', fol
 assert(cyc.folders.some(f => f.parent === null && (f.id === 'p' || f.id === 'q')), 'import breaks a parent cycle')
 assert(cyc.folders.find(f => f.id === 'o').parent === null, 'import lifts orphan folder to top level')
 assert(!('s' in cyc.placed) && cyc.placed.t === 'p', 'import drops placement into missing folders')
+
+// ── row gestures: core's ⇧-click language, pinned-pane subset (#12) ──
+const { handlePinnedRowClick, pinnedRowClick, chatMenuItems } = mod
+const click = mods => {
+  const calls = { open: [], unpin: 0, prevented: 0, stopped: 0 }
+  const e = { altKey: false, ctrlKey: false, metaKey: false, shiftKey: false, ...mods, preventDefault: () => calls.prevented++, stopPropagation: () => calls.stopped++ }
+  calls.action = handlePinnedRowClick(e, { open: intent => calls.open.push(intent), unpin: () => calls.unpin++ })
+  return calls
+}
+let k = click({ shiftKey: true })
+assert(k.unpin === 1 && k.open.length === 0, 'shift+click unpins and does NOT open the chat')
+assert(k.prevented === 1 && k.stopped === 1, 'shift+click is consumed (no bubbling to the list, no default)')
+k = click({})
+assert(k.open.length === 1 && k.open[0] === undefined && k.unpin === 0, 'plain click still opens the chat')
+k = click({ metaKey: true })
+assert(k.open.join() === 'tab' && !k.unpin, 'cmd/ctrl+click still opens in a new tab')
+assert(pinnedRowClick({ altKey: true, shiftKey: true }) === 'open' && pinnedRowClick({ metaKey: true, shiftKey: true }) === 'tab',
+  'alt+shift (archive) and cmd+shift (new window) stay core-only: never unpin here')
+const menuAct = { open: () => {}, copyId: () => {}, place: () => {}, unpin: () => {}, del: () => {}, rename: () => {}, toggleRead: () => {}, archive: () => {} }
+const menu = chatMenuItems({ id: 's1' }, { fid: null, flat: [], canUnpin: true, act: menuAct })
+const labels = menu.filter(it => it && it.label).map(it => it.label)
+assert(['Open', 'Open in new tab', 'Open in new window', 'Copy session ID', 'Unpin', 'Delete…'].every(l => labels.includes(l)),
+  'context/kebab menu keeps its items: ' + labels.join('|'))
+assert(menu.find(it => it.label === 'Unpin').onSelect === menuAct.unpin, 'menu Unpin and the shift+click gesture share one handler')
+const oldMenu = chatMenuItems({ id: 's1' }, { fid: null, flat: [], canUnpin: false, act: menuAct })
+assert(oldMenu.find(it => /^Unpin/.test(it.label || '')).disabled === true, 'menu Unpin stays disabled with guidance when unpin is unavailable')
+
+// ── filter menu: view state (#12) ──
+const { normalizeView, narrowView, orderRows, applyView, DEFAULT_VIEW } = mod
+const legacy = { folders: [{ id: 'w', name: 'Work', parent: null, color: 'hsl(1 2% 3%)' }], placed: { a: 'w' }, order: ['a'], collapsed: { w: true }, foldersOrdered: true }
+const loaded = normalize(JSON.parse(JSON.stringify(legacy)))
+assert(JSON.stringify(loaded.view) === JSON.stringify(DEFAULT_VIEW), 'old layout without view state loads with default view')
+assert(JSON.stringify({ ...loaded, view: undefined }) === JSON.stringify({ ...legacy, view: undefined }), 'old layout keeps folders, colors, placement, order, collapse unchanged')
+assert(JSON.stringify(normalizeView({ order: 'sideways', status: 42, unreadOnly: 'yes' })) === JSON.stringify(DEFAULT_VIEW), 'garbage view values fall back to defaults')
+const recRows = [{ id: 'old', last_active: 100 }, { id: 'mid', last_active: 200 }, { id: 'new', last_active: 300 }]
+assert(orderRows(recRows, ['old', 'new', 'mid'], 'manual').map(r => r.id).join() === 'old,new,mid', 'ordering Manual follows the dragged order')
+assert(orderRows(recRows, ['old', 'new', 'mid'], 'recent').map(r => r.id).join() === 'new,mid,old', 'ordering Most recent sorts by last activity')
+let V = ops.placeSession(ops.addFolder(normalize(null), null, 'W', 'w'), 'r1', 'w')
+V = ops.placeSession(V, 'u1', 'w')
+const vr = [{ id: 'r1', title: 'read', profile: 'default' }, { id: 'u1', title: 'unread', unread: true, profile: 'work' }, { id: 'act', title: 'busy', is_active: true }]
+assert(narrowView(V, vr, '', V.view, 'default') === null, 'default view does not filter')
+let nv = narrowView(V, vr, '', ops.setView(V, { unreadOnly: true }).view, 'default')
+assert(nv.chats.has('u1') && !nv.chats.has('r1') && !nv.chats.has('act') && nv.folders.has('w'), 'unread-only hides read rows, keeps the folder of an unread one')
+nv = narrowView(V, vr, '', ops.setView(V, { status: 'working' }).view, 'default')
+assert(nv.chats.has('act') && nv.chats.size === 1 && !nv.folders.has('w'), 'status Working shows only working rows; folders with none hide')
+assert(applyView(vr, { profile: 'current' }, 'default').map(r => r.id).join() === 'r1,act', 'profile Current keeps rows of the current profile (no profile = default)')
+nv = narrowView(V, vr, 'unread', ops.setView(V, { profile: 'current' }).view, 'default')
+assert(nv.chats.size === 0, 'text filter and view filters combine')
+assert(narrowView(V, vr, '', ops.setView(V, { order: 'recent' }).view, 'default') === null, 'ordering alone filters nothing')
+let R = ops.setView(ops.setColor(V, 'w', 'red'), { order: 'recent', unreadOnly: true, status: 'unread', profile: 'current' })
+const rs = ops.resetView(R)
+assert(JSON.stringify(rs.view) === JSON.stringify(DEFAULT_VIEW), 'reset view restores filter + ordering defaults')
+assert(JSON.stringify({ ...rs, view: 0 }) === JSON.stringify({ ...R, view: 0 }), 'reset view leaves folders, colors and layout alone')
+assert(JSON.stringify(normalize(JSON.parse(JSON.stringify(R))).view) === JSON.stringify(R.view), 'view state survives save/reload')
+const C = ops.collapseAll(ops.addFolder(V, 'w', 'Sub', 'sub'))
+assert(C.collapsed.w && C.collapsed.sub && C.collapsed.__unsorted, 'collapse all closes every folder and Unsorted')
+
+// ── #13 review: Collapse all under a filter (F1), Open all = visible rows (F2) ──
+const { collapseAllItem, chatsBeneath, visibleRows } = mod
+let collapsed = 0
+const caOff = collapseAllItem({ filtering: false, empty: false, collapse: () => collapsed++ })
+caOff.onSelect()
+assert(!caOff.disabled && caOff.label === 'Collapse all' && collapsed === 1, 'collapse all is enabled with no filter and runs the collapse')
+const caOn = collapseAllItem({ filtering: true, empty: false, collapse: () => collapsed++ })
+caOn.onSelect()
+assert(caOn.disabled === true && /clear filters to collapse/i.test(caOn.label) && collapsed === 1, 'collapse all is disabled while a filter is active, with the reason in its label')
+let G = ops.addFolder(ops.addFolder(normalize(null), null, 'W', 'w'), 'w', 'Sub', 'sub')
+for (const [sid, f] of [['r1', 'w'], ['u1', 'w'], ['u2', 'sub'], ['r2', 'sub']]) G = ops.placeSession(G, sid, f)
+const gr = [{ id: 'r1', title: 'read' }, { id: 'u1', title: 'new', unread: true }, { id: 'u2', title: 'news', unread: true }, { id: 'r2', title: 'old' }]
+const gIn = new Map([['w', gr.filter(r => G.placed[r.id] === 'w')], ['sub', gr.filter(r => G.placed[r.id] === 'sub')]])
+const gKids = new Map([['w', G.folders.filter(f => f.parent === 'w')]])
+assert(chatsBeneath('w', gIn, gKids, null).map(r => r.id).join() === 'r1,u1,u2,r2', 'open all as tabs with no filter opens every chat beneath the folder')
+const gUnread = narrowView(G, gr, '', ops.setView(G, { unreadOnly: true }).view, 'default')
+assert(chatsBeneath('w', gIn, gKids, gUnread).map(r => r.id).join() === 'u1,u2', 'open all as tabs under Unread only opens only the visible rows')
+const gText = narrowView(G, gr, 'old', G.view, 'default')
+assert(chatsBeneath('w', gIn, gKids, gText).map(r => r.id).join() === 'r2', 'open all as tabs under the text filter opens only the visible rows')
+assert(visibleRows(gIn.get('w'), gUnread).map(r => r.id).join() === 'u1', 'the render selector and open all share visibleRows')

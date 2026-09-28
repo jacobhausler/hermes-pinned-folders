@@ -59,11 +59,23 @@ let os = null // ctx.os (clipboard), set in register()
 
 // ── pure tree ops (exported for tests) ───────────────────────────────────────
 
-const empty = () => ({ folders: [], placed: {}, order: [], collapsed: {}, foldersOrdered: true })
+// View options from the filter menu: how chats are ordered and which are
+// shown. They never touch folders, colors, placement or collapse state.
+export const DEFAULT_VIEW = Object.freeze({ order: 'manual', unreadOnly: false, status: 'all', profile: 'all' })
+const VIEW_CHOICES = { order: ['manual', 'recent'], status: ['all', 'unread', 'working'], profile: ['all', 'current'] }
+
+export function normalizeView(v) {
+  const src = v && typeof v === 'object' ? v : {}
+  const pick = k => (VIEW_CHOICES[k].includes(src[k]) ? src[k] : DEFAULT_VIEW[k])
+  return { order: pick('order'), unreadOnly: src.unreadOnly === true, status: pick('status'), profile: pick('profile') }
+}
+
+const empty = () => ({ folders: [], placed: {}, order: [], collapsed: {}, foldersOrdered: true, view: { ...DEFAULT_VIEW } })
 
 // Folder order is the user's (array order). Layouts saved before manual
 // ordering existed were shown alphabetically, so sort them once on load.
 // Every write after that saves the flag, and the sort never runs again.
+// Layouts saved before the filter menu have no `view`: they get the defaults.
 export function normalize(v) {
   if (!v || typeof v !== 'object') return empty()
   let folders = Array.isArray(v.folders) ? v.folders.filter(f => f && typeof f.id === 'string') : []
@@ -73,7 +85,8 @@ export function normalize(v) {
     placed: v.placed && typeof v.placed === 'object' ? v.placed : {},
     order: Array.isArray(v.order) ? v.order : [],
     collapsed: v.collapsed && typeof v.collapsed === 'object' ? v.collapsed : {},
-    foldersOrdered: true
+    foldersOrdered: true,
+    view: normalizeView(v.view)
   }
 }
 
@@ -175,6 +188,19 @@ export const ops = {
         return next
       })
     }
+  },
+  setView(t, patch) {
+    return { ...t, view: normalizeView({ ...normalizeView(t.view), ...patch }) }
+  },
+  // Filters and ordering go back to defaults. The layout itself is untouched.
+  resetView(t) {
+    return { ...t, view: { ...DEFAULT_VIEW } }
+  },
+  // Close every folder and Unsorted.
+  collapseAll(t) {
+    const collapsed = { ...t.collapsed, __unsorted: true }
+    for (const f of t.folders) collapsed[f.id] = true
+    return { ...t, collapsed }
   }
 }
 
@@ -227,6 +253,149 @@ export function filterView(t, rows, query) {
     }
   }
   return { folders, chats }
+}
+
+const profileKey = p => String(p || '').trim() || 'default'
+
+// True when any filter narrows the rows. Ordering is not a filter.
+export const viewFilters = view => {
+  const v = normalizeView(view)
+  return v.unreadOnly || v.status !== 'all' || v.profile !== 'all'
+}
+
+export const viewIsDefault = view => {
+  const v = normalizeView(view)
+  return Object.keys(DEFAULT_VIEW).every(k => v[k] === DEFAULT_VIEW[k])
+}
+
+// The rows the view options let through. Status words match the badges:
+// unread = the green dot (row.unread), working = the accent dot (row.is_active).
+export function applyView(rows, view, currentProfile) {
+  const v = normalizeView(view)
+  const here = profileKey(currentProfile)
+  return (rows || []).filter(row => {
+    if (v.unreadOnly && !row.unread) return false
+    if (v.status === 'unread' && !row.unread) return false
+    if (v.status === 'working' && !row.is_active) return false
+    if (v.profile === 'current' && profileKey(row.profile) !== here) return false
+    return true
+  })
+}
+
+// Text filter + view filters combined, in filterView's shape (null = show
+// everything). While a view filter is set, a folder shows only when it holds
+// a surviving chat.
+export function narrowView(t, rows, query, view, currentProfile) {
+  const textView = filterView(t, rows, query)
+  if (!viewFilters(view)) return textView
+  const byId = new Map(t.folders.map(f => [f.id, f]))
+  const folders = new Set()
+  const chats = new Set()
+  for (const row of applyView(rows, view, currentProfile)) {
+    if (textView && !textView.chats.has(row.id)) continue
+    chats.add(row.id)
+    const fid = t.placed[row.id]
+    if (fid && byId.has(fid)) ancestorsOf(byId, fid).forEach(f => folders.add(f.id))
+  }
+  return { folders, chats }
+}
+
+// The rows of one list that the current view shows (view = narrowView's
+// result; null shows everything). The ONE selector for "what is visible": the
+// pane renders through it and Open all as tabs / the count read through it,
+// so a folder never acts on chats it is not showing.
+export function visibleRows(list, view) {
+  return view ? (list || []).filter(r => view.chats.has(r.id)) : list || []
+}
+
+// Every visible chat beneath a folder, in display order (its own, then
+// subfolders'). sessionsIn: folderId → ordered rows; childFolders: folderId →
+// child folders.
+export function chatsBeneath(fid, sessionsIn, childFolders, view) {
+  return [
+    ...visibleRows(sessionsIn.get(fid), view),
+    ...(childFolders.get(fid) || []).flatMap(c => chatsBeneath(c.id, sessionsIn, childFolders, view))
+  ]
+}
+
+// Filter menu's Collapse all. While any filter (text box or view filter) is
+// set, surviving folders are forced open to show matches, so collapsing would
+// do nothing visible: the item is disabled and its label says why (label text,
+// not a tooltip, so keyboard and screen-reader users get the reason too).
+export function collapseAllItem({ filtering, empty, collapse }) {
+  return filtering
+    ? { label: 'Collapse all (clear filters to collapse)', icon: 'collapse-all', disabled: true, onSelect: () => {} }
+    : { label: 'Collapse all', icon: 'collapse-all', disabled: !!empty, onSelect: collapse }
+}
+
+const recency = r => r.last_active || r.started_at || 0
+
+// Chats inside one folder: Manual = the dragged order (unplaced ones newest
+// first), Most recent = newest activity first.
+export function orderRows(list, order, mode) {
+  const rank = new Map((order || []).map((sid, i) => [sid, i]))
+  return [...list].sort((a, b) =>
+    mode === 'recent'
+      ? recency(b) - recency(a)
+      : (rank.get(a.id) ?? Infinity) - (rank.get(b.id) ?? Infinity) || recency(b) - recency(a)
+  )
+}
+
+// ── row click: core's Sessions gesture language, pinned-pane subset ─────────
+// Core (session-row-gesture.ts): ⌥⇧ archive, ⌘/⌃⇧ new window, ⌘/⌃ new tab,
+// ⇧ pin/unpin, plain click resumes. Archive and new window stay core-only, so
+// those combinations do what they did here before (open / new tab). The only
+// new gesture is a bare ⇧-click, which unpins a pinned row.
+export function pinnedRowClick({ altKey, ctrlKey, metaKey, shiftKey }) {
+  if (altKey && shiftKey) return 'open'
+  if (metaKey || ctrlKey) return 'tab'
+  if (shiftKey) return 'unpin'
+  return 'open'
+}
+
+// `open(intent)` opens the chat. `unpin()` is the menu's Unpin handler.
+// Returns the action taken.
+export function handlePinnedRowClick(e, { open, unpin }) {
+  const action = pinnedRowClick(e)
+  if (action === 'unpin') {
+    e.preventDefault?.() // no text selection, nothing else fires
+    e.stopPropagation?.()
+    unpin()
+  } else open(action === 'tab' ? 'tab' : undefined)
+  return action
+}
+
+// The chat's ⋯ and right-click menu. `act` carries the handlers; `act.unpin`
+// is also what the ⇧-click gesture calls.
+export function chatMenuItems(row, { fid, flat, canUnpin, act }) {
+  return [
+    { label: 'Open', icon: 'go-to-file', onSelect: () => act.open() },
+    { label: 'Open in new tab', icon: 'split-horizontal', onSelect: () => act.open('tab') },
+    { label: 'Open in new window', icon: 'link-external', onSelect: () => act.open('window') },
+    '-',
+    { label: 'Copy session ID', icon: 'copy', onSelect: act.copyId },
+    '-',
+    { header: 'Move to' },
+    { label: 'Unsorted', icon: 'inbox', disabled: fid === ROOT, onSelect: () => act.place(ROOT) },
+    ...flat.map(({ f, depth: d }) => ({
+      label: f.name,
+      icon: 'folder',
+      indent: d,
+      disabled: f.id === fid,
+      onSelect: () => act.place(f.id)
+    })),
+    '-',
+    // In the full build the backend PATCH is always available. In the
+    // catalog build expose SDK unpin only when this Desktop provides it.
+    {
+      label: canUnpin ? 'Unpin' : 'Unpin (update Desktop or use Sessions)',
+      icon: 'pinned',
+      disabled: !canUnpin,
+      onSelect: act.unpin
+    },
+    '-',
+    { label: 'Delete…', icon: 'trash', destructive: true, onSelect: act.del }
+  ]
 }
 
 // ── export / import ──────────────────────────────────────────────────────────
@@ -603,8 +772,12 @@ function PinnedPane() {
   const [importing, setImporting] = useState(false)
   const drag = useRef(null)
 
+  const currentProfile = useValue(host.state.profile)
+  const viewOpts = normalizeView(tree.view)
+  const setView = patch => setTree(t => ops.setView(t, patch))
+
   const folderIds = useMemo(() => new Set(tree.folders.map(f => f.id)), [tree.folders])
-  const view = useMemo(() => filterView(tree, rows, query), [tree, rows, query])
+  const view = useMemo(() => narrowView(tree, rows, query, tree.view, currentProfile), [tree, rows, query, currentProfile])
   const activity = useMemo(() => folderActivity(tree, rows), [tree, rows])
 
   const childFolders = useMemo(() => {
@@ -619,27 +792,16 @@ function PinnedPane() {
 
   const sessionsIn = useMemo(() => {
     const m = new Map()
-    const rank = new Map(tree.order.map((sid, i) => [sid, i]))
     for (const row of rows || []) {
       const fid = folderOf(tree, folderIds, row.id)
       if (!m.has(fid)) m.set(fid, [])
       m.get(fid).push(row)
     }
-    for (const list of m.values()) {
-      list.sort(
-        (a, b) =>
-          (rank.get(a.id) ?? Infinity) - (rank.get(b.id) ?? Infinity) ||
-          (b.last_active || b.started_at || 0) - (a.last_active || a.started_at || 0)
-      )
-    }
+    for (const [fid, list] of m) m.set(fid, orderRows(list, tree.order, viewOpts.order))
     return m
-  }, [rows, tree, folderIds])
+  }, [rows, tree, folderIds, viewOpts.order])
 
-  const countIn = id => {
-    let n = (sessionsIn.get(id) || []).length
-    for (const f of childFolders.get(id) || []) n += countIn(f.id)
-    return n
-  }
+  const countIn = id => chatsBeneath(id, sessionsIn, childFolders, view).length
 
   // Flattened folder list with depth, for "Move to…" menus.
   const flat = useMemo(() => {
@@ -661,6 +823,8 @@ function PinnedPane() {
     setEditing(id)
   }
 
+  let canUnpin = typeof host.sessions?.pin === 'function'
+
   const openRow = (row, intent) =>
     host
       .openSession(row.id, { profile: row.profile || undefined, ...(intent ? { intent } : {}) })
@@ -680,15 +844,10 @@ function PinnedPane() {
     host.notify({ kind: 'success', message: 'Chat deleted', durationMs: 2000 })
   }
 
-  // Every chat beneath a folder, in display order (its own, then subfolders').
-  const chatsBeneath = fid => [
-    ...(sessionsIn.get(fid) || []),
-    ...(childFolders.get(fid) || []).flatMap(c => chatsBeneath(c.id))
-  ]
-
   // Sequential on purpose: each open settles before the next tab is made.
+  // Only the chats the folder shows (same selector as the render).
   const openAllAsTabs = async fid => {
-    for (const row of chatsBeneath(fid)) await openRow(row, 'tab')
+    for (const row of chatsBeneath(fid, sessionsIn, childFolders, view)) await openRow(row, 'tab')
   }
 
   const exportToClipboard = async () => {
@@ -806,46 +965,34 @@ function PinnedPane() {
 
   // ── rows ──
   const sessionRow = (row, depth) => {
-    if (view && !view.chats.has(row.id)) return null
     const fid = folderOf(tree, folderIds, row.id)
-    let canUnpin = typeof host.sessions?.pin === 'function'
-    const items = [
-      { label: 'Open', icon: 'go-to-file', onSelect: () => openRow(row) },
-      { label: 'Open in new tab', icon: 'split-horizontal', onSelect: () => openRow(row, 'tab') },
-      { label: 'Open in new window', icon: 'link-external', onSelect: () => openRow(row, 'window') },
-      '-',
-      { label: 'Copy session ID', icon: 'copy', onSelect: () => copyId(row) },
-      '-',
-      { header: 'Move to' },
-      { label: 'Unsorted', icon: 'inbox', disabled: fid === ROOT, onSelect: () => setTree(t => ops.placeSession(t, row.id, ROOT)) },
-      ...flat.map(({ f, depth: d }) => ({
-        label: f.name,
-        icon: 'folder',
-        indent: d,
-        disabled: f.id === fid,
-        onSelect: () => setTree(t => ops.placeSession(t, row.id, f.id))
-      })),
-      '-',
-      // In the full build the backend PATCH is always available. In the
-      // catalog build expose SDK unpin only when this Desktop provides it.
-      {
-        label: canUnpin ? 'Unpin' : 'Unpin (update Desktop or use Sessions)',
-        icon: 'pinned',
-        disabled: !canUnpin,
-        onSelect: () => {
-          unpinAndReconcile(row, {
-            refresh: refreshRows,
-            forget: id => {
-              dropRow(id)
-              setTree(t => ops.forgetSession(t, id))
-            },
-            notifyError: err => host.notifyError(err, 'Could not unpin that chat')
-          }).catch(err => console.error('[pinned-folders] unpin failed', err))
-        }
-      },
-      '-',
-      { label: 'Delete…', icon: 'trash', destructive: true, onSelect: () => setDeleting(row) }
-    ]
+    // One unpin handler for the menu item and the ⇧-click gesture.
+    const unpin = () => {
+      if (!canUnpin) {
+        host.notify({ kind: 'error', message: 'Update Hermes Desktop, or unpin this chat in Sessions (⋯ → Unpin).' })
+        return
+      }
+      unpinAndReconcile(row, {
+        refresh: refreshRows,
+        forget: id => {
+          dropRow(id)
+          setTree(t => ops.forgetSession(t, id))
+        },
+        notifyError: err => host.notifyError(err, 'Could not unpin that chat')
+      }).catch(err => console.error('[pinned-folders] unpin failed', err))
+    }
+    const items = chatMenuItems(row, {
+      fid,
+      flat,
+      canUnpin,
+      act: {
+        open: intent => openRow(row, intent),
+        copyId: () => copyId(row),
+        place: folder => setTree(t => ops.placeSession(t, row.id, folder)),
+        unpin,
+        del: () => setDeleting(row),
+      }
+    })
     const active = focused && focused === row.id
     const renaming = editing === 's:' + row.id
     const el = jsxs(
@@ -862,8 +1009,8 @@ function PinnedPane() {
           ...(active ? { background: 'var(--ui-row-active-background)' } : null),
           ...(dropAt === 's:' + row.id ? { boxShadow: 'inset 0 2px 0 var(--theme-primary)' } : null)
         }),
-        title: row.title || row.preview || row.id,
-        onClick: e => !renaming && openRow(row, e.metaKey || e.ctrlKey ? 'tab' : undefined),
+        title: (row.title || row.preview || row.id) + (canUnpin ? '\nShift-click to unpin' : ''),
+        onClick: e => !renaming && handlePinnedRowClick(e, { open: intent => openRow(row, intent), unpin }),
         children: [
           jsx(SidebarRowLead, { children: jsx(SessionStatusDot, { storedSessionId: row.id, session: row }) }, 'dot'),
           renaming
@@ -997,12 +1144,12 @@ function PinnedPane() {
     return [
       wrapped,
       ...(childFolders.get(f.id) || []).flatMap(c => folderRow(c, depth + 1)),
-      ...(sessionsIn.get(f.id) || []).map(r => sessionRow(r, depth + 1)).filter(Boolean)
+      ...visibleRows(sessionsIn.get(f.id), view).map(r => sessionRow(r, depth + 1))
     ]
   }
 
   const unsorted = sessionsIn.get(ROOT) || []
-  const unsortedShown = view ? unsorted.filter(r => view.chats.has(r.id)) : unsorted
+  const unsortedShown = visibleRows(unsorted, view)
   const unsortedOpen = view ? true : !tree.collapsed.__unsorted
   const unsortedRows = view && !unsortedShown.length ? [] : [
     jsxs(
@@ -1021,7 +1168,7 @@ function PinnedPane() {
       },
       'unsorted'
     ),
-    ...(unsortedOpen ? unsortedShown.map(r => sessionRow(r, 1)).filter(Boolean) : [])
+    ...(unsortedOpen ? unsortedShown.map(r => sessionRow(r, 1)) : [])
   ]
 
   const note = text =>
@@ -1035,8 +1182,28 @@ function PinnedPane() {
   } else {
     body = [...(childFolders.get(ROOT) || []).flatMap(f => folderRow(f, 0)), ...unsortedRows]
     if (rows.length === 0) body.push(note('No pinned chats yet. Pin one in Sessions (⋯ → Pin); it lands in Unsorted.'))
-    else if (view && !body.length) body.push(note('Nothing matches “' + query.trim() + '”.'))
+    else if (view && !body.length) body.push(note(query.trim() ? 'Nothing matches “' + query.trim() + '”.' : 'No pinned chats match this view.'))
   }
+
+  const pick = (label, on, onSelect) => ({ label, icon: on ? 'check' : 'blank', onSelect })
+  const filterItems = [
+    { header: 'Order' },
+    pick('Manual', viewOpts.order === 'manual', () => setView({ order: 'manual' })),
+    pick('Most recent', viewOpts.order === 'recent', () => setView({ order: 'recent' })),
+    '-',
+    pick('Unread only', viewOpts.unreadOnly, () => setView({ unreadOnly: !viewOpts.unreadOnly })),
+    { header: 'Status' },
+    pick('All', viewOpts.status === 'all', () => setView({ status: 'all' })),
+    pick('Unread', viewOpts.status === 'unread', () => setView({ status: 'unread' })),
+    pick('Working', viewOpts.status === 'working', () => setView({ status: 'working' })),
+    { header: 'Profile' },
+    pick('All profiles', viewOpts.profile === 'all', () => setView({ profile: 'all' })),
+    pick('Current profile' + (currentProfile ? ` (${currentProfile})` : ''), viewOpts.profile === 'current', () => setView({ profile: 'current' })),
+    '-',
+    collapseAllItem({ filtering: !!view, empty: !tree.folders.length && !unsorted.length, collapse: () => setTree(ops.collapseAll) }),
+    { label: 'Reset view', icon: 'discard', disabled: viewIsDefault(viewOpts), onSelect: () => setTree(ops.resetView) }
+  ]
+  const narrowed = viewFilters(viewOpts)
 
   return jsxs('div', {
     'data-pinned-folders': '',
@@ -1056,6 +1223,7 @@ function PinnedPane() {
               'label'
             ),
             jsx(IconButton, { icon: 'new-folder', title: 'New folder', onClick: () => newFolder(ROOT) }, 'new'),
+            jsx(RowMenu, { items: filterItems, icon: narrowed ? 'filter-filled' : 'filter', label: narrowed ? 'Filter and order (filtered)' : 'Filter and order' }, 'filter'),
             jsx(RowMenu, { items: layoutItems, icon: 'kebab-vertical', label: 'More' }, 'more')
           ]
         },
@@ -1087,7 +1255,10 @@ function PinnedPane() {
         },
         'list'
       ),
-      jsx(ImportDialog, { open: importing, onOpenChange: setImporting, onImport: next => mutateTree(key, () => next) }, 'import'),
+      rows && rows.length && canUnpin
+        ? jsx('div', { className: 'text-(--ui-text-quaternary)', style: { padding: '4px 10px 6px', fontSize: '0.6875rem', flexShrink: 0 }, children: 'Shift-click a chat to unpin' }, 'hint')
+        : null,
+      jsx(ImportDialog, { open: importing, onOpenChange: setImporting, onImport: next => mutateTree(key, t => ({ ...next, view: t.view })) }, 'import'),
       jsx(
         ConfirmDialog,
         {

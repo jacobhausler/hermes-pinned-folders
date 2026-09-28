@@ -22,8 +22,17 @@ Hermes shows pinned chats as one flat list. This plugin gives them their own tab
 - **Right-click menus.** Every chat and folder has the same actions as its ⋯ menu. Right-click empty space for **New folder** and the layout tools.
 - **Chat actions like the Sessions list:** Open, Open in new tab, Open in new window, Copy session ID, Unpin, and Delete (asks first). The full build adds Rename (also by double-clicking), Mark as read/unread, and Archive. On older Desktop releases without `host.sessions.pin`, the catalog menu instead explains that you must update Desktop or unpin in Sessions.
 - **Activity on collapsed folders.** A closed folder shows a green count of unread chats inside it and an accent dot while an agent is working inside. This includes chats in subfolders.
+- **Shift-click a chat to unpin**, the same gesture core Sessions uses to pin. A plain click opens the chat and ⌘-click or Ctrl-click opens it in a new tab. Archive (⌥⇧-click) and new window (⌘⇧-click) stay in core Sessions. The ⋯ and right-click **Unpin** item does the same thing.
 - **Filter box.** Type to narrow down to matching chats, and to folders whose names match.
-- **Open all as tabs.** Opens every chat in a folder, including its subfolders, as workspace tabs. ⌘-click or Ctrl-click a single chat to open it in a new tab.
+- **Filter menu** (the funnel button in the pane header):
+  - **Order:** Manual (your drag order, the default) or Most recent.
+  - **Unread only**, and **Status:** All, Unread or Working (the same green and accent dots as the badges).
+  - **Profile:** All profiles or Current profile.
+  - **Collapse all** folders. While a filter is set, matching folders stay open to show the matches, so the item is disabled and reads *Clear filters to collapse*.
+  - **Reset view** sets filters and order back to their defaults. It never changes folders, colors or layout.
+
+  The menu has no **Mark all as read**: the plugin SDK has no supported way to do it.
+- **Open all as tabs.** Opens every chat the folder shows, including its subfolders, as workspace tabs. With a filter set, only the chats you can see open. ⌘-click or Ctrl-click a single chat to open it in a new tab.
 - **Export and import layout.** Copies your folder layout as JSON so you can paste it on another machine. Importing replaces the folders only; pins are never changed.
 - New pins land in **Unsorted**.
 - The folder layout is stored in the app, separately for each connection.
@@ -33,7 +42,8 @@ Hermes shows pinned chats as one flat list. This plugin gives them their own tab
 | | Catalog build `desktop/plugin.js` | Full build `full/plugin.js` |
 |---|---|---|
 | Everything above | ✓ | ✓ |
-| **Unpin** from the folder tab | ✓ (SDK `host.sessions.pin` on supported Desktop) | ✓ (backend PATCH) |
+| **Unpin** from the folder tab, by menu or Shift-click | ✓ (SDK `host.sessions.pin` on supported Desktop) | ✓ (backend PATCH) |
+| **Filter menu** (order, unread, status, profile, collapse all, reset view) | ✓ | ✓ |
 | **Rename, Mark as read/unread, Archive** a chat | – | ✓ |
 | **Auto-pin chats you start** (not agent, cron, or workflow sessions), with an optional "New chats land here" folder | – | ✓ |
 | **Hide core's flat Pinned list** in Sessions | – | ✓ |
