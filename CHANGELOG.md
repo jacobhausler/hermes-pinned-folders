@@ -11,6 +11,9 @@ colored, drag-ordered folders for pinned chats. Two builds come from one source:
 which uses only the SDK.
 
 ### Fixed
+- Catalog build: the pinned-row menu has a working **Unpin** through the SDK's
+  `host.sessions.pin(id, false)`; on Desktop older than `host.sessions` the item renders
+  disabled with update guidance (#10, fixes #7, @jacobhausler)
 - Catalog build no longer reads `document.hidden`. The hidden-window polling back-off
   now exists only in the full build, and the SDK-only test catches any `document.`
   reference (#8, @jacobhausler)
