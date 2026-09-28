@@ -290,3 +290,24 @@ assert(JSON.stringify({ ...rs, view: 0 }) === JSON.stringify({ ...R, view: 0 }),
 assert(JSON.stringify(normalize(JSON.parse(JSON.stringify(R))).view) === JSON.stringify(R.view), 'view state survives save/reload')
 const C = ops.collapseAll(ops.addFolder(V, 'w', 'Sub', 'sub'))
 assert(C.collapsed.w && C.collapsed.sub && C.collapsed.__unsorted, 'collapse all closes every folder and Unsorted')
+
+// ── #13 review: Collapse all under a filter (F1), Open all = visible rows (F2) ──
+const { collapseAllItem, chatsBeneath, visibleRows } = mod
+let collapsed = 0
+const caOff = collapseAllItem({ filtering: false, empty: false, collapse: () => collapsed++ })
+caOff.onSelect()
+assert(!caOff.disabled && caOff.label === 'Collapse all' && collapsed === 1, 'collapse all is enabled with no filter and runs the collapse')
+const caOn = collapseAllItem({ filtering: true, empty: false, collapse: () => collapsed++ })
+caOn.onSelect()
+assert(caOn.disabled === true && /clear filters to collapse/i.test(caOn.label) && collapsed === 1, 'collapse all is disabled while a filter is active, with the reason in its label')
+let G = ops.addFolder(ops.addFolder(normalize(null), null, 'W', 'w'), 'w', 'Sub', 'sub')
+for (const [sid, f] of [['r1', 'w'], ['u1', 'w'], ['u2', 'sub'], ['r2', 'sub']]) G = ops.placeSession(G, sid, f)
+const gr = [{ id: 'r1', title: 'read' }, { id: 'u1', title: 'new', unread: true }, { id: 'u2', title: 'news', unread: true }, { id: 'r2', title: 'old' }]
+const gIn = new Map([['w', gr.filter(r => G.placed[r.id] === 'w')], ['sub', gr.filter(r => G.placed[r.id] === 'sub')]])
+const gKids = new Map([['w', G.folders.filter(f => f.parent === 'w')]])
+assert(chatsBeneath('w', gIn, gKids, null).map(r => r.id).join() === 'r1,u1,u2,r2', 'open all as tabs with no filter opens every chat beneath the folder')
+const gUnread = narrowView(G, gr, '', ops.setView(G, { unreadOnly: true }).view, 'default')
+assert(chatsBeneath('w', gIn, gKids, gUnread).map(r => r.id).join() === 'u1,u2', 'open all as tabs under Unread only opens only the visible rows')
+const gText = narrowView(G, gr, 'old', G.view, 'default')
+assert(chatsBeneath('w', gIn, gKids, gText).map(r => r.id).join() === 'r2', 'open all as tabs under the text filter opens only the visible rows')
+assert(visibleRows(gIn.get('w'), gUnread).map(r => r.id).join() === 'u1', 'the render selector and open all share visibleRows')

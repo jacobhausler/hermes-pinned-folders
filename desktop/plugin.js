@@ -300,6 +300,34 @@ export function narrowView(t, rows, query, view, currentProfile) {
   return { folders, chats }
 }
 
+// The rows of one list that the current view shows (view = narrowView's
+// result; null shows everything). The ONE selector for "what is visible": the
+// pane renders through it and Open all as tabs / the count read through it,
+// so a folder never acts on chats it is not showing.
+export function visibleRows(list, view) {
+  return view ? (list || []).filter(r => view.chats.has(r.id)) : list || []
+}
+
+// Every visible chat beneath a folder, in display order (its own, then
+// subfolders'). sessionsIn: folderId → ordered rows; childFolders: folderId →
+// child folders.
+export function chatsBeneath(fid, sessionsIn, childFolders, view) {
+  return [
+    ...visibleRows(sessionsIn.get(fid), view),
+    ...(childFolders.get(fid) || []).flatMap(c => chatsBeneath(c.id, sessionsIn, childFolders, view))
+  ]
+}
+
+// Filter menu's Collapse all. While any filter (text box or view filter) is
+// set, surviving folders are forced open to show matches, so collapsing would
+// do nothing visible: the item is disabled and its label says why (label text,
+// not a tooltip, so keyboard and screen-reader users get the reason too).
+export function collapseAllItem({ filtering, empty, collapse }) {
+  return filtering
+    ? { label: 'Collapse all (clear filters to collapse)', icon: 'collapse-all', disabled: true, onSelect: () => {} }
+    : { label: 'Collapse all', icon: 'collapse-all', disabled: !!empty, onSelect: collapse }
+}
+
 const recency = r => r.last_active || r.started_at || 0
 
 // Chats inside one folder: Manual = the dragged order (unplaced ones newest
@@ -773,11 +801,7 @@ function PinnedPane() {
     return m
   }, [rows, tree, folderIds, viewOpts.order])
 
-  const countIn = id => {
-    let n = (sessionsIn.get(id) || []).length
-    for (const f of childFolders.get(id) || []) n += countIn(f.id)
-    return n
-  }
+  const countIn = id => chatsBeneath(id, sessionsIn, childFolders, view).length
 
   // Flattened folder list with depth, for "Move to…" menus.
   const flat = useMemo(() => {
@@ -820,15 +844,10 @@ function PinnedPane() {
     host.notify({ kind: 'success', message: 'Chat deleted', durationMs: 2000 })
   }
 
-  // Every chat beneath a folder, in display order (its own, then subfolders').
-  const chatsBeneath = fid => [
-    ...(sessionsIn.get(fid) || []),
-    ...(childFolders.get(fid) || []).flatMap(c => chatsBeneath(c.id))
-  ]
-
   // Sequential on purpose: each open settles before the next tab is made.
+  // Only the chats the folder shows (same selector as the render).
   const openAllAsTabs = async fid => {
-    for (const row of chatsBeneath(fid)) await openRow(row, 'tab')
+    for (const row of chatsBeneath(fid, sessionsIn, childFolders, view)) await openRow(row, 'tab')
   }
 
   const exportToClipboard = async () => {
@@ -946,7 +965,6 @@ function PinnedPane() {
 
   // ── rows ──
   const sessionRow = (row, depth) => {
-    if (view && !view.chats.has(row.id)) return null
     const fid = folderOf(tree, folderIds, row.id)
     // One unpin handler for the menu item and the ⇧-click gesture.
     const unpin = () => {
@@ -1126,12 +1144,12 @@ function PinnedPane() {
     return [
       wrapped,
       ...(childFolders.get(f.id) || []).flatMap(c => folderRow(c, depth + 1)),
-      ...(sessionsIn.get(f.id) || []).map(r => sessionRow(r, depth + 1)).filter(Boolean)
+      ...visibleRows(sessionsIn.get(f.id), view).map(r => sessionRow(r, depth + 1))
     ]
   }
 
   const unsorted = sessionsIn.get(ROOT) || []
-  const unsortedShown = view ? unsorted.filter(r => view.chats.has(r.id)) : unsorted
+  const unsortedShown = visibleRows(unsorted, view)
   const unsortedOpen = view ? true : !tree.collapsed.__unsorted
   const unsortedRows = view && !unsortedShown.length ? [] : [
     jsxs(
@@ -1150,7 +1168,7 @@ function PinnedPane() {
       },
       'unsorted'
     ),
-    ...(unsortedOpen ? unsortedShown.map(r => sessionRow(r, 1)).filter(Boolean) : [])
+    ...(unsortedOpen ? unsortedShown.map(r => sessionRow(r, 1)) : [])
   ]
 
   const note = text =>
@@ -1182,7 +1200,7 @@ function PinnedPane() {
     pick('All profiles', viewOpts.profile === 'all', () => setView({ profile: 'all' })),
     pick('Current profile' + (currentProfile ? ` (${currentProfile})` : ''), viewOpts.profile === 'current', () => setView({ profile: 'current' })),
     '-',
-    { label: 'Collapse all', icon: 'collapse-all', disabled: !tree.folders.length && !unsorted.length, onSelect: () => setTree(ops.collapseAll) },
+    collapseAllItem({ filtering: !!view, empty: !tree.folders.length && !unsorted.length, collapse: () => setTree(ops.collapseAll) }),
     { label: 'Reset view', icon: 'discard', disabled: viewIsDefault(viewOpts), onSelect: () => setTree(ops.resetView) }
   ]
   const narrowed = viewFilters(viewOpts)

@@ -28,11 +28,11 @@ Hermes shows pinned chats as one flat list. This plugin gives them their own tab
   - **Order:** Manual (your drag order, the default) or Most recent.
   - **Unread only**, and **Status:** All, Unread or Working (the same green and accent dots as the badges).
   - **Profile:** All profiles or Current profile.
-  - **Collapse all** folders.
+  - **Collapse all** folders. While a filter is set, matching folders stay open to show the matches, so the item is disabled and reads *Clear filters to collapse*.
   - **Reset view** sets filters and order back to their defaults. It never changes folders, colors or layout.
 
   The menu has no **Mark all as read**: the plugin SDK has no supported way to do it.
-- **Open all as tabs.** Opens every chat in a folder, including its subfolders, as workspace tabs. ⌘-click or Ctrl-click a single chat to open it in a new tab.
+- **Open all as tabs.** Opens every chat the folder shows, including its subfolders, as workspace tabs. With a filter set, only the chats you can see open. ⌘-click or Ctrl-click a single chat to open it in a new tab.
 - **Export and import layout.** Copies your folder layout as JSON so you can paste it on another machine. Importing replaces the folders only; pins are never changed.
 - New pins land in **Unsorted**.
 - The folder layout is stored in the app, separately for each connection.
