@@ -59,7 +59,9 @@ import { jsx, jsxs } from 'react/jsx-runtime'
 
 const ROOT = null // "Unsorted": a chat with no folder
 const POLL_MS = 4000
+// #full
 const POLL_HIDDEN_MS = 15000
+// #end
 
 let store = null // ctx.storage, set in register()
 let os = null // ctx.os (clipboard), set in register()
@@ -536,7 +538,11 @@ function usePinnedRows(scope) {
       } catch (err) {
         if (alive) setState(prev => ({ rows: prev.rows, error: String(err?.message || err) }))
       }
-      if (alive) timer = setTimeout(tick, document.hidden ? POLL_HIDDEN_MS : POLL_MS)
+      let wait = POLL_MS
+      // #full
+      if (document.hidden) wait = POLL_HIDDEN_MS // page visibility is a DOM read: full build only
+      // #end
+      if (alive) timer = setTimeout(tick, wait)
     }
 
     refresh.current = tick

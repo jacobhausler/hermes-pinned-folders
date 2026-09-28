@@ -82,6 +82,7 @@ if (FULL) {
   assert(autoPinNext({ ...fresh, started_at: sec - 3600 }, now, new Set(), now, until) === 'skip', 'old chat judged without pinning')
 } else {
   const leaks = ['hermesDesktop', 'localStorage', 'querySelector', 'MutationObserver', 'BroadcastChannel', 'composer.middleware', 'translateNow'].filter(w => src.includes(w))
+  if (/\bdocument\s*\./.test(src.replace(/^\s*(\/\/|\*).*$/gm, ''))) leaks.push('document')
   assert(!leaks.length, 'catalog build stays inside the SDK: ' + (leaks.join(', ') || 'no internals referenced'))
   assert(!('scrubCorePins' in mod) && !('isFreshUserChat' in mod), 'catalog build has no unpin/auto-pin code')
 }
