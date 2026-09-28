@@ -20,7 +20,7 @@ Hermes shows pinned chats as one flat list. This plugin gives them their own tab
   - Drop a chat on a folder to file it, or on another chat to place it just above that chat.
   - Folder order is whatever you set. Nothing is sorted automatically.
 - **Right-click menus.** Every chat and folder has the same actions as its ⋯ menu. Right-click empty space for **New folder** and the layout tools.
-- **Chat actions like the Sessions list:** Open, Open in new tab, Open in new window, Copy session ID, and Delete (asks first). The full build adds Rename (also by double-clicking), Mark as read/unread, Archive, and Unpin.
+- **Chat actions like the Sessions list:** Open, Open in new tab, Open in new window, Copy session ID, Unpin, and Delete (asks first). The full build adds Rename (also by double-clicking), Mark as read/unread, and Archive. On older Desktop releases without `host.sessions.pin`, the catalog menu instead explains that you must update Desktop or unpin in Sessions.
 - **Activity on collapsed folders.** A closed folder shows a green count of unread chats inside it and an accent dot while an agent is working inside. This includes chats in subfolders.
 - **Filter box.** Type to narrow down to matching chats, and to folders whose names match.
 - **Open all as tabs.** Opens every chat in a folder, including its subfolders, as workspace tabs. ⌘-click or Ctrl-click a single chat to open it in a new tab.
@@ -33,7 +33,7 @@ Hermes shows pinned chats as one flat list. This plugin gives them their own tab
 | | Catalog build `desktop/plugin.js` | Full build `full/plugin.js` |
 |---|---|---|
 | Everything above | ✓ | ✓ |
-| **Unpin** from the folder tab | – | ✓ |
+| **Unpin** from the folder tab | ✓ (SDK `host.sessions.pin` on supported Desktop) | ✓ (backend PATCH) |
 | **Rename, Mark as read/unread, Archive** a chat | – | ✓ |
 | **Auto-pin chats you start** (not agent, cron, or workflow sessions), with an optional "New chats land here" folder | – | ✓ |
 | **Hide core's flat Pinned list** in Sessions | – | ✓ |
@@ -42,13 +42,17 @@ If a new chat cannot be resolved or pinned within 60 seconds, the full build sho
 
 The catalog build uses only the Hermes Desktop plugin SDK, which the [plugin catalog](https://github.com/NousResearch/hermes-agent/tree/main/plugin-catalog) requires.
 
-The SDK has no way to pin, unpin, rename, archive, or change a chat's read state, and no way to hide a core sidebar section, so the full build reaches past it for those features:
+The catalog build unpins only through the supported `host.sessions.pin(id, false)` SDK method: core updates its pin store and syncs the durable flag to the owning backend. If that method is missing in an older Desktop, the action is disabled with an update/"use Sessions" explanation; it does not touch core internals or merely remove a chat from the folder layout. Because core writes the backend pin in the background, the catalog build keeps the chat's folder placement until a fresh read of the pinned list shows it gone; if the backend keeps it pinned, the chat stays in its original folder and order.
 
-- It sends those chat changes through the app's API bridge, using the same request the Sessions menu sends.
-- It edits core's saved pin list.
+Known limitation: catalog Unpin of a chat whose id exists in more than one profile follows core's active-profile resolution; the full build targets the row's own profile.
+
+The SDK still has no supported door for rename, archive, read state, detecting new chats for auto-pin, or hiding a core sidebar section. The full build reaches past it for those features and retains its direct backend unpin path:
+
+- It sends chat changes through the app's API bridge, using the same request the Sessions menu sends.
+- For direct unpin it also scrubs core's saved pin list so core cannot re-pin the backend row.
 - It hides the core Pinned section by changing the page directly.
 
-These could break when the app updates. If one does, only that feature stops working. When the SDK adds these capabilities, they will move into the catalog build.
+These internals could break when the app updates. If one does, only that feature stops working. New SDK capabilities can replace full-only paths after verification.
 
 Both builds come from `full/plugin.js`. `node scripts/build.mjs` writes the catalog build by deleting every `// #full` … `// #end` block.
 

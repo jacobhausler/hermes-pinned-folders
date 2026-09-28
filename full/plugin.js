@@ -11,9 +11,9 @@
  * - Layout is local to this app, one copy per connection (ctx.storage).
  *
  * Two builds come from this one file. Blocks between `// #full` and `// #end`
- * reach past the plugin SDK (unpin, auto-pin chats you start, hide core's
- * flat Pinned list); scripts/build.mjs deletes them to make the catalog build
- * at desktop/plugin.js, which uses the SDK only.
+ * reach past the plugin SDK (the full build's direct unpin, auto-pin chats
+ * you start, hide core's flat Pinned list); scripts/build.mjs deletes them
+ * to make desktop/plugin.js. Catalog unpin uses host.sessions.pin only.
  *
  * Plain ESM, loaded uncompiled: jsx()/jsxs() calls only.
  */
@@ -385,6 +385,53 @@ async function unpinRow(row) {
 }
 // #end
 
+// `sessionsHost` follows the pinAndJudge injectable pattern: the app passes the
+// SDK host (default); tests inject a stub with or without sessions.pin.
+export async function unpinPinnedRow(row, sessionsHost = host) {
+  // #full
+  // Full installs write the owning profile's backend directly and scrub the
+  // legacy core pin cache; do not also send a second SDK pin mutation.
+  await unpinRow(row)
+  return
+  // #end
+  // The SDK verb writes core's pin store; core syncs it to the backend.
+  // Older Desktop versions lack the verb, so never fall through to internals.
+  if (typeof sessionsHost.sessions?.pin !== 'function') throw new Error('Update Hermes Desktop, or unpin this chat in Sessions (⋯ → Unpin).')
+  await sessionsHost.sessions.pin(row.id, false)
+}
+
+// Unpin, then decide what happens to the chat's folder placement.
+// `refresh()` re-reads the pinned rows and resolves to them (null on a failed
+// read); `forget(id)` drops the row and its placement; `notifyError(err)`.
+// Full build: the backend PATCH is a real ack, so placement is forgotten
+// straight away. Catalog build: host.sessions.pin(id, false) resolves before
+// core's backend write lands (it is fire-and-forget), so resolving proves
+// nothing. Placement is forgotten only once a refreshed pinned list no longer
+// contains the id (reconcile-on-read); if the backend keeps the pin, the chat
+// stays in its original folder and order. Returns 'pruned' | 'kept' | 'failed'.
+export async function unpinAndReconcile(row, { sessionsHost = host, refresh, forget, notifyError, reads = 3, sleep = ms => new Promise(r => setTimeout(r, ms)), gapMs = 1000 }) {
+  try {
+    await unpinPinnedRow(row, sessionsHost)
+  } catch (err) {
+    notifyError(err)
+    await refresh()
+    return 'failed'
+  }
+  // #full
+  forget(row.id)
+  return 'pruned'
+  // #end
+  for (let i = 0; i < reads; i++) {
+    if (i) await sleep(gapMs)
+    const rows = await refresh()
+    if (Array.isArray(rows) && !rows.some(r => r.id === row.id)) {
+      forget(row.id)
+      return 'pruned'
+    }
+  }
+  return 'kept'
+}
+
 // ── shared tree state (pane + auto-pin write through one door) ───────────────
 
 const bus = new Set()
@@ -520,6 +567,7 @@ function usePinnedRows(scope) {
 
     const tick = async () => {
       clearTimeout(timer)
+      let fresh = null
       try {
         const res = await host.listPersistedSessions(null, { profile: 'all', limit: 0 })
         const seen = new Set()
@@ -535,6 +583,7 @@ function usePinnedRows(scope) {
         scrubTombstones()
         // #end
         if (alive) setState({ rows, error: null })
+        fresh = rows
       } catch (err) {
         if (alive) setState(prev => ({ rows: prev.rows, error: String(err?.message || err) }))
       }
@@ -543,6 +592,7 @@ function usePinnedRows(scope) {
       if (document.hidden) wait = POLL_HIDDEN_MS // page visibility is a DOM read: full build only
       // #end
       if (alive) timer = setTimeout(tick, wait)
+      return fresh // this read's pinned rows (null if it failed): unpin reconciles on it
     }
 
     refresh.current = tick
@@ -1093,6 +1143,10 @@ function PinnedPane() {
   const sessionRow = (row, depth) => {
     if (view && !view.chats.has(row.id)) return null
     const fid = folderOf(tree, folderIds, row.id)
+    let canUnpin = typeof host.sessions?.pin === 'function'
+    // #full
+    canUnpin = true // full build uses the backend PATCH, even on older Desktop
+    // #end
     const items = [
       { label: 'Open', icon: 'go-to-file', onSelect: () => openRow(row) },
       { label: 'Open in new tab', icon: 'split-horizontal', onSelect: () => openRow(row, 'tab') },
@@ -1113,20 +1167,25 @@ function PinnedPane() {
         disabled: f.id === fid,
         onSelect: () => setTree(t => ops.placeSession(t, row.id, f.id))
       })),
-      // #full
       '-',
+      // In the full build the backend PATCH is always available. In the
+      // catalog build expose SDK unpin only when this Desktop provides it.
       {
-        label: 'Unpin',
+        label: canUnpin ? 'Unpin' : 'Unpin (update Desktop or use Sessions)',
         icon: 'pinned',
+        disabled: !canUnpin,
         onSelect: () => {
-          dropRow(row.id)
-          setTree(t => ops.forgetSession(t, row.id))
-          unpinRow(row).catch(err => {
-            host.notifyError(err, 'Could not unpin that chat')
-            refreshRows()
-          })
+          unpinAndReconcile(row, {
+            refresh: refreshRows,
+            forget: id => {
+              dropRow(id)
+              setTree(t => ops.forgetSession(t, id))
+            },
+            notifyError: err => host.notifyError(err, 'Could not unpin that chat')
+          }).catch(err => console.error('[pinned-folders] unpin failed', err))
         }
       },
+      // #full
       { label: 'Archive', icon: 'archive', onSelect: () => archiveRow(row) },
       // #end
       '-',
