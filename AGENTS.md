@@ -68,5 +68,5 @@ Screenshots use demo chats only: a throwaway `HERMES_HOME` outside `~/.hermes`, 
 
 ## Releasing
 
-1. Bump `version` in `plugin.yaml`. Rebuild, test, validate, commit and push.
+1. On a `release/vX.Y.Z` branch, bump `version` in `plugin.yaml` and add the `CHANGELOG.md` section (merged PRs since the last tag, with `#n` and author). Rebuild, test, validate, then open a PR labelled `release`. The owner tags `vX.Y.Z` on the merge commit.
 2. The catalog entry (`plugin-catalog/pinned-folders.yaml` in NousResearch/hermes-agent) pins a full 40-character commit SHA. A release is a PR there that moves the SHA and version.
