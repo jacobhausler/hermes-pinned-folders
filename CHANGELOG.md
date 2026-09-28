@@ -3,6 +3,18 @@
 All notable changes to this plugin. Versions follow `plugin.yaml`; each release is a
 `vX.Y.Z` tag and a catalog entry pinned to that tag's commit.
 
+## [0.1.1] - 2026-09-28
+
+### Added
+- Pinned pane gestures: ⇧-click a pinned chat to **unpin** it (same path as the menu's
+  Unpin: PATCH in the full build, SDK `host.sessions.pin(id, false)` in the catalog
+  build); ⌘/⌃-click still opens a new tab. The ⋯ and right-click menus share one item
+  list, and the hint is hidden where unpin is unavailable (#13, fixes #12, @jacobhausler)
+- Filter menu in the Pinned header: order (Manual / Most recent), unread only, status
+  (All / Unread / Working), profile (All / Current), collapse all, reset view. The view
+  is saved per connection as `view`; older layouts without it load unchanged through
+  `normalize()` (#13, @jacobhausler)
+
 ## [0.1.0] - 2026-09-28
 
 First release. Adds a **Pinned** tab to the Hermes Desktop sidebar with nested,
@@ -27,4 +39,5 @@ which uses only the SDK.
 - repo-admin standard: path-scoped CI `gates` check, CONTRIBUTING with the review
   checklist, PR template (#2, @jacobhausler)
 
+[0.1.1]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.1
 [0.1.0]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.0
