@@ -283,11 +283,13 @@ const byName = (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true
 // ── pinned rows: the backend's own pinned flag, all profiles ─────────────────
 // limit=0 + include_pinned back-fill = exactly the pinned rows, nothing else.
 
-async function unpinPinnedRow(row) {
+// `sessionsHost` follows the pinAndJudge injectable pattern: the app passes the
+// SDK host (default); tests inject a stub with or without sessions.pin.
+export async function unpinPinnedRow(row, sessionsHost = host) {
   // The SDK verb writes core's pin store; core syncs it to the backend.
   // Older Desktop versions lack the verb, so never fall through to internals.
-  if (typeof host.sessions?.pin !== 'function') throw new Error('Update Hermes Desktop, or unpin this chat in Sessions (⋯ → Unpin).')
-  host.sessions.pin(row.id, false)
+  if (typeof sessionsHost.sessions?.pin !== 'function') throw new Error('Update Hermes Desktop, or unpin this chat in Sessions (⋯ → Unpin).')
+  sessionsHost.sessions.pin(row.id, false)
 }
 
 // ── shared tree state (pane + auto-pin write through one door) ───────────────

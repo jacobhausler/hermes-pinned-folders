@@ -80,11 +80,56 @@ if (FULL) {
   assert(autoPinNext(null, now, new Set(), until, until) === 'timeout', 'unresolved row reports deadline')
   assert(autoPinNext(fresh, now, new Set(), until, until) === 'timeout', 'failed PATCH reports deadline')
   assert(autoPinNext({ ...fresh, started_at: sec - 3600 }, now, new Set(), now, until) === 'skip', 'old chat judged without pinning')
+
+  // ── full unpin: backend PATCH + core scrub, never a second SDK pin mutation ──
+  const patchCalls = []
+  const fullLocalStorage = new Map([
+    ['hermes.desktop.pinnedSessions', JSON.stringify(['s1', 'keep'])],
+    ['hermes.desktop.pinnedSessions.remote.https%3A%2F%2Fdesk', JSON.stringify(['s1'])]
+  ])
+  globalThis.window = {
+    hermesDesktop: { api: async opts => { patchCalls.push(opts) } },
+    localStorage: {
+      get length() { return fullLocalStorage.size },
+      key: i => [...fullLocalStorage.keys()][i],
+      getItem: k => fullLocalStorage.get(k) ?? null,
+      setItem: (k, v) => fullLocalStorage.set(k, v)
+    }
+  }
+  let sdkPinCalls = 0
+  await mod.unpinPinnedRow({ id: 's1', profile: 'p1' }, { sessions: { pin: (id, v) => { sdkPinCalls++ } } })
+  delete globalThis.window
+  assert(patchCalls.length === 1 && patchCalls[0].path === '/api/sessions/s1' && patchCalls[0].method === 'PATCH' && patchCalls[0].body.pinned === false && patchCalls[0].profile === 'p1',
+    'full unpin sends the backend PATCH (pinned:false, owning profile)')
+  assert(sdkPinCalls === 0, 'full unpin does NOT also call host.sessions.pin (no double mutation)')
+  assert(fullLocalStorage.get('hermes.desktop.pinnedSessions') === '["keep"]' && !fullLocalStorage.get('hermes.desktop.pinnedSessions.remote.https%3A%2F%2Fdesk')?.includes('s1'),
+    'full unpin scrubs the row from core pin caches (local + remote scope)')
 } else {
   const leaks = ['hermesDesktop', 'localStorage', 'querySelector', 'MutationObserver', 'BroadcastChannel', 'composer.middleware', 'translateNow'].filter(w => src.includes(w))
   if (/\bdocument\s*\./.test(src.replace(/^\s*(\/\/|\*).*$/gm, ''))) leaks.push('document')
   assert(!leaks.length, 'catalog build stays inside the SDK: ' + (leaks.join(', ') || 'no internals referenced'))
   assert(!('scrubCorePins' in mod) && !('isFreshUserChat' in mod), 'catalog build has no full-only pin cache/auto-pin code')
+  assert(typeof mod.unpinPinnedRow === 'function', 'catalog build exports the unpin path')
+
+  // ── catalog unpin on supported Desktop: exactly one SDK pin(id, false) ──
+  const pinCalls = []
+  await mod.unpinPinnedRow({ id: 's1' }, { sessions: { pin: (id, v) => pinCalls.push([id, v]) } })
+  assert(pinCalls.length === 1 && pinCalls[0][0] === 's1' && pinCalls[0][1] === false, 'catalog unpin calls host.sessions.pin(id, false) exactly once')
+
+  // ── catalog unpin on older Desktop: guidance error, layout untouched ──
+  let oldHostErr = ''
+  let layout = ops.placeSession(ops.addFolder(normalize(null), null, 'W', 'w'), 's1', 'w')
+  const layoutBefore = JSON.stringify(layout)
+  try {
+    // Mirrors the menu contract: dropRow/forgetSession run only after success.
+    await mod.unpinPinnedRow({ id: 's1' }, { sessions: {} })
+    layout = ops.forgetSession(layout, 's1')
+  } catch (e) { oldHostErr = e.message }
+  assert(/update hermes desktop|unpin this chat in sessions/i.test(oldHostErr), 'older Desktop (no sessions.pin): unpin reports the guidance error: ' + oldHostErr)
+  assert(JSON.stringify(layout) === layoutBefore, 'failed unpin leaves the layout untouched (no layout-only unpin)')
+  let noSessionsErr = ''
+  try { await mod.unpinPinnedRow({ id: 's1' }, {}) } catch (e) { noSessionsErr = e.message }
+  assert(/update hermes desktop/i.test(noSessionsErr), 'host without sessions at all: same guidance error, no internals touched')
 }
 
 const names = t => t.folders.filter(f => !f.parent).map(f => f.name).join(',')

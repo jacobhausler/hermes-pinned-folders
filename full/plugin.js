@@ -385,7 +385,9 @@ async function unpinRow(row) {
 }
 // #end
 
-async function unpinPinnedRow(row) {
+// `sessionsHost` follows the pinAndJudge injectable pattern: the app passes the
+// SDK host (default); tests inject a stub with or without sessions.pin.
+export async function unpinPinnedRow(row, sessionsHost = host) {
   // #full
   // Full installs write the owning profile's backend directly and scrub the
   // legacy core pin cache; do not also send a second SDK pin mutation.
@@ -394,8 +396,8 @@ async function unpinPinnedRow(row) {
   // #end
   // The SDK verb writes core's pin store; core syncs it to the backend.
   // Older Desktop versions lack the verb, so never fall through to internals.
-  if (typeof host.sessions?.pin !== 'function') throw new Error('Update Hermes Desktop, or unpin this chat in Sessions (⋯ → Unpin).')
-  host.sessions.pin(row.id, false)
+  if (typeof sessionsHost.sessions?.pin !== 'function') throw new Error('Update Hermes Desktop, or unpin this chat in Sessions (⋯ → Unpin).')
+  sessionsHost.sessions.pin(row.id, false)
 }
 
 // ── shared tree state (pane + auto-pin write through one door) ───────────────
