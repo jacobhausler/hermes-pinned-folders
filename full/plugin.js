@@ -11,9 +11,9 @@
  * - Layout is local to this app, one copy per connection (ctx.storage).
  *
  * Two builds come from this one file. Blocks between `// #full` and `// #end`
- * reach past the plugin SDK (unpin, auto-pin chats you start, hide core's
- * flat Pinned list); scripts/build.mjs deletes them to make the catalog build
- * at desktop/plugin.js, which uses the SDK only.
+ * reach past the plugin SDK (the full build's direct unpin, auto-pin chats
+ * you start, hide core's flat Pinned list); scripts/build.mjs deletes them
+ * to make desktop/plugin.js. Catalog unpin uses host.sessions.pin only.
  *
  * Plain ESM, loaded uncompiled: jsx()/jsxs() calls only.
  */
@@ -384,6 +384,19 @@ async function unpinRow(row) {
   pingCoreSessions()
 }
 // #end
+
+async function unpinPinnedRow(row) {
+  // #full
+  // Full installs write the owning profile's backend directly and scrub the
+  // legacy core pin cache; do not also send a second SDK pin mutation.
+  await unpinRow(row)
+  return
+  // #end
+  // The SDK verb writes core's pin store; core syncs it to the backend.
+  // Older Desktop versions lack the verb, so never fall through to internals.
+  if (typeof host.sessions?.pin !== 'function') throw new Error('Update Hermes Desktop, or unpin this chat in Sessions (⋯ → Unpin).')
+  host.sessions.pin(row.id, false)
+}
 
 // ── shared tree state (pane + auto-pin write through one door) ───────────────
 
@@ -1093,6 +1106,10 @@ function PinnedPane() {
   const sessionRow = (row, depth) => {
     if (view && !view.chats.has(row.id)) return null
     const fid = folderOf(tree, folderIds, row.id)
+    let canUnpin = typeof host.sessions?.pin === 'function'
+    // #full
+    canUnpin = true // full build uses the backend PATCH, even on older Desktop
+    // #end
     const items = [
       { label: 'Open', icon: 'go-to-file', onSelect: () => openRow(row) },
       { label: 'Open in new tab', icon: 'split-horizontal', onSelect: () => openRow(row, 'tab') },
@@ -1113,20 +1130,26 @@ function PinnedPane() {
         disabled: f.id === fid,
         onSelect: () => setTree(t => ops.placeSession(t, row.id, f.id))
       })),
-      // #full
       '-',
+      // In the full build the backend PATCH is always available. In the
+      // catalog build expose SDK unpin only when this Desktop provides it.
       {
-        label: 'Unpin',
+        label: canUnpin ? 'Unpin' : 'Unpin (update Desktop or use Sessions)',
         icon: 'pinned',
+        disabled: !canUnpin,
         onSelect: () => {
-          dropRow(row.id)
-          setTree(t => ops.forgetSession(t, row.id))
-          unpinRow(row).catch(err => {
-            host.notifyError(err, 'Could not unpin that chat')
-            refreshRows()
-          })
+          unpinPinnedRow(row)
+            .then(() => {
+              dropRow(row.id)
+              setTree(t => ops.forgetSession(t, row.id))
+            })
+            .catch(err => {
+              host.notifyError(err, 'Could not unpin that chat')
+              refreshRows()
+            })
         }
       },
+      // #full
       { label: 'Archive', icon: 'archive', onSelect: () => archiveRow(row) },
       // #end
       '-',

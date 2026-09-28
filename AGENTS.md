@@ -50,7 +50,7 @@ Read `graphify-out/GRAPH_REPORT.md` for the hubs and communities. `graphify-out/
    ```
 
    To change the shape, migrate old data inside `normalize()` and add a test for the old form. Exported layouts carry `pinned-folders/layout@1`. Bump that tag only together with an import path for the previous version.
-5. **Pins belong to the backend.** Folders only arrange pinned chats. The catalog build never changes a pin. In the full build, only Unpin and auto-pin do.
+5. **Pins belong to the backend.** Folders only arrange pinned chats. Catalog Unpin uses only the SDK's `host.sessions.pin(id, false)` (which core syncs to the owning backend); on older Desktop without that method it is disabled with guidance to use Sessions, never a local layout-only unpin. Full Unpin uses its direct backend PATCH + core pin-cache scrub, and full auto-pin also writes the backend.
 
 ## Try it live
 

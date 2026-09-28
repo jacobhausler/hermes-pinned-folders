@@ -84,7 +84,7 @@ if (FULL) {
   const leaks = ['hermesDesktop', 'localStorage', 'querySelector', 'MutationObserver', 'BroadcastChannel', 'composer.middleware', 'translateNow'].filter(w => src.includes(w))
   if (/\bdocument\s*\./.test(src.replace(/^\s*(\/\/|\*).*$/gm, ''))) leaks.push('document')
   assert(!leaks.length, 'catalog build stays inside the SDK: ' + (leaks.join(', ') || 'no internals referenced'))
-  assert(!('scrubCorePins' in mod) && !('isFreshUserChat' in mod), 'catalog build has no unpin/auto-pin code')
+  assert(!('scrubCorePins' in mod) && !('isFreshUserChat' in mod), 'catalog build has no full-only pin cache/auto-pin code')
 }
 
 const names = t => t.folders.filter(f => !f.parent).map(f => f.name).join(',')
