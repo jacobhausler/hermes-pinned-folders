@@ -104,6 +104,15 @@ if (FULL) {
   assert(sdkPinCalls === 0, 'full unpin does NOT also call host.sessions.pin (no double mutation)')
   assert(fullLocalStorage.get('hermes.desktop.pinnedSessions') === '["keep"]' && !fullLocalStorage.get('hermes.desktop.pinnedSessions.remote.https%3A%2F%2Fdesk')?.includes('s1'),
     'full unpin scrubs the row from core pin caches (local + remote scope)')
+  globalThis.window = { hermesDesktop: { api: async () => {} }, localStorage: { length: 0, key: () => null, getItem: () => null, setItem: () => {} } }
+  const forgot = []
+  const fullOut = await mod.unpinAndReconcile({ id: 's1', profile: 'p1' }, { refresh: async () => [{ id: 's1' }], forget: id => forgot.push(id), notifyError: () => {} })
+  assert(fullOut === 'pruned' && forgot.join() === 's1', 'full unpin: awaited backend PATCH is the ack -> placement forgotten at once')
+  globalThis.window.hermesDesktop.api = async () => { throw new Error('patch boom') }
+  const fullErrs = [], fullForgot = []
+  const fullFail = await mod.unpinAndReconcile({ id: 's2', profile: 'p1' }, { refresh: async () => null, forget: id => fullForgot.push(id), notifyError: e => fullErrs.push(e.message) })
+  delete globalThis.window
+  assert(fullFail === 'failed' && !fullForgot.length && fullErrs.join() === 'patch boom', 'full unpin: PATCH rejection -> placement kept + notifyError')
 } else {
   const leaks = ['hermesDesktop', 'localStorage', 'querySelector', 'MutationObserver', 'BroadcastChannel', 'composer.middleware', 'translateNow'].filter(w => src.includes(w))
   if (/\bdocument\s*\./.test(src.replace(/^\s*(\/\/|\*).*$/gm, ''))) leaks.push('document')
@@ -136,6 +145,37 @@ if (FULL) {
   let noSessionsErr = ''
   try { await mod.unpinPinnedRow({ id: 's1' }, {}) } catch (e) { noSessionsErr = e.message }
   assert(/update hermes desktop/i.test(noSessionsErr), 'host without sessions at all: same guidance error, no internals touched')
+
+  // ── catalog unpin reconciles on read: pin(id,false) resolving is no ack ──
+  // Harness mirrors the pane: layout lives in `lay`, forget prunes it.
+  const unpinHarness = (pinImpl, reads) => {
+    const h = { lay: ops.placeSession(ops.placeSession(ops.addFolder(normalize(null), null, 'W', 'w'), 's0', 'w'), 's1', 'w'), errors: [], refreshes: 0 }
+    h.before = JSON.stringify(h.lay)
+    h.run = () => mod.unpinAndReconcile({ id: 's1' }, {
+      sessionsHost: { sessions: { pin: pinImpl } },
+      refresh: async () => reads[Math.min(h.refreshes++, reads.length - 1)],
+      forget: id => { h.lay = ops.forgetSession(h.lay, id) },
+      notifyError: e => h.errors.push(e.message),
+      sleep: async () => {}
+    })
+    return h
+  }
+  let h = unpinHarness(async () => {}, [[{ id: 's0' }, { id: 's1' }]])
+  let out = await h.run()
+  assert(out === 'kept' && JSON.stringify(h.lay) === h.before && h.lay.placed.s1 === 'w' && h.lay.order.join() === 's0,s1',
+    'catalog unpin: pin resolves but refreshed list STILL has the id -> original folder + order preserved (' + out + ')')
+  assert(h.refreshes >= 2 && !h.errors.length, 'catalog unpin re-reads before giving up, no error shown')
+  h = unpinHarness(async () => {}, [[{ id: 's0' }, { id: 's1' }], [{ id: 's0' }]])
+  out = await h.run()
+  assert(out === 'pruned' && !('s1' in h.lay.placed) && !h.lay.order.includes('s1') && h.lay.placed.s0 === 'w',
+    'catalog unpin: refreshed list drops the id -> placement pruned (' + out + ')')
+  h = unpinHarness(async () => {}, [null, [{ id: 's0' }]])
+  out = await h.run()
+  assert(out === 'pruned', 'catalog unpin: a failed read (null) never prunes; a later good read does')
+  h = unpinHarness(async () => { throw new Error('pin boom') }, [[{ id: 's0' }]])
+  out = await h.run()
+  assert(out === 'failed' && JSON.stringify(h.lay) === h.before && h.errors.join() === 'pin boom' && h.refreshes === 1,
+    'catalog unpin: rejection -> placement kept + notifyError + refresh')
 }
 
 const names = t => t.folders.filter(f => !f.parent).map(f => f.name).join(',')

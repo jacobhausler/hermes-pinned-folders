@@ -42,7 +42,9 @@ If a new chat cannot be resolved or pinned within 60 seconds, the full build sho
 
 The catalog build uses only the Hermes Desktop plugin SDK, which the [plugin catalog](https://github.com/NousResearch/hermes-agent/tree/main/plugin-catalog) requires.
 
-The catalog build unpins only through the supported `host.sessions.pin(id, false)` SDK method: core updates its pin store and syncs the durable flag to the owning backend. If that method is missing in an older Desktop, the action is disabled with an update/"use Sessions" explanation; it does not touch core internals or merely remove a chat from the folder layout.
+The catalog build unpins only through the supported `host.sessions.pin(id, false)` SDK method: core updates its pin store and syncs the durable flag to the owning backend. If that method is missing in an older Desktop, the action is disabled with an update/"use Sessions" explanation; it does not touch core internals or merely remove a chat from the folder layout. Because core writes the backend pin in the background, the catalog build keeps the chat's folder placement until a fresh read of the pinned list shows it gone; if the backend keeps it pinned, the chat stays in its original folder and order.
+
+Known limitation: catalog Unpin of a chat whose id exists in more than one profile follows core's active-profile resolution; the full build targets the row's own profile.
 
 The SDK still has no supported door for rename, archive, read state, detecting new chats for auto-pin, or hiding a core sidebar section. The full build reaches past it for those features and retains its direct backend unpin path:
 

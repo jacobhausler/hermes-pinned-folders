@@ -400,6 +400,38 @@ export async function unpinPinnedRow(row, sessionsHost = host) {
   await sessionsHost.sessions.pin(row.id, false)
 }
 
+// Unpin, then decide what happens to the chat's folder placement.
+// `refresh()` re-reads the pinned rows and resolves to them (null on a failed
+// read); `forget(id)` drops the row and its placement; `notifyError(err)`.
+// Full build: the backend PATCH is a real ack, so placement is forgotten
+// straight away. Catalog build: host.sessions.pin(id, false) resolves before
+// core's backend write lands (it is fire-and-forget), so resolving proves
+// nothing. Placement is forgotten only once a refreshed pinned list no longer
+// contains the id (reconcile-on-read); if the backend keeps the pin, the chat
+// stays in its original folder and order. Returns 'pruned' | 'kept' | 'failed'.
+export async function unpinAndReconcile(row, { sessionsHost = host, refresh, forget, notifyError, reads = 3, sleep = ms => new Promise(r => setTimeout(r, ms)), gapMs = 1000 }) {
+  try {
+    await unpinPinnedRow(row, sessionsHost)
+  } catch (err) {
+    notifyError(err)
+    await refresh()
+    return 'failed'
+  }
+  // #full
+  forget(row.id)
+  return 'pruned'
+  // #end
+  for (let i = 0; i < reads; i++) {
+    if (i) await sleep(gapMs)
+    const rows = await refresh()
+    if (Array.isArray(rows) && !rows.some(r => r.id === row.id)) {
+      forget(row.id)
+      return 'pruned'
+    }
+  }
+  return 'kept'
+}
+
 // ── shared tree state (pane + auto-pin write through one door) ───────────────
 
 const bus = new Set()
@@ -535,6 +567,7 @@ function usePinnedRows(scope) {
 
     const tick = async () => {
       clearTimeout(timer)
+      let fresh = null
       try {
         const res = await host.listPersistedSessions(null, { profile: 'all', limit: 0 })
         const seen = new Set()
@@ -550,6 +583,7 @@ function usePinnedRows(scope) {
         scrubTombstones()
         // #end
         if (alive) setState({ rows, error: null })
+        fresh = rows
       } catch (err) {
         if (alive) setState(prev => ({ rows: prev.rows, error: String(err?.message || err) }))
       }
@@ -558,6 +592,7 @@ function usePinnedRows(scope) {
       if (document.hidden) wait = POLL_HIDDEN_MS // page visibility is a DOM read: full build only
       // #end
       if (alive) timer = setTimeout(tick, wait)
+      return fresh // this read's pinned rows (null if it failed): unpin reconciles on it
     }
 
     refresh.current = tick
@@ -1140,15 +1175,14 @@ function PinnedPane() {
         icon: 'pinned',
         disabled: !canUnpin,
         onSelect: () => {
-          unpinPinnedRow(row)
-            .then(() => {
-              dropRow(row.id)
-              setTree(t => ops.forgetSession(t, row.id))
-            })
-            .catch(err => {
-              host.notifyError(err, 'Could not unpin that chat')
-              refreshRows()
-            })
+          unpinAndReconcile(row, {
+            refresh: refreshRows,
+            forget: id => {
+              dropRow(id)
+              setTree(t => ops.forgetSession(t, id))
+            },
+            notifyError: err => host.notifyError(err, 'Could not unpin that chat')
+          }).catch(err => console.error('[pinned-folders] unpin failed', err))
         }
       },
       // #full

@@ -19,8 +19,8 @@ Node 22 or newer. Nothing to install.
 
 ```sh
 node scripts/build.mjs          # → built desktop/plugin.js
-node tests/ops.test.mjs         # catalog build → 41 "ok" lines, exit 0
-node tests/ops.test.mjs full    # full build   → 54 "ok" lines, exit 0
+node tests/ops.test.mjs         # catalog build → 46 "ok" lines, exit 0
+node tests/ops.test.mjs full    # full build   → 56 "ok" lines, exit 0
 hermes plugins validate .       # → "Validation passed." (catalog admission; not an SDK-only proof)
 ```
 
@@ -41,7 +41,7 @@ Read `graphify-out/GRAPH_REPORT.md` for the hubs and communities. `graphify-out/
 
 1. **The catalog build uses only the plugin SDK.** Imports come from `@hermes/plugin-sdk`, `react` and `react/jsx-runtime`. Anything that reaches past the SDK goes inside a `// #full` … `// #end` block: `window.hermesDesktop`, `localStorage`, `document`, or core's own storage keys. `node tests/ops.test.mjs` enforces this ("catalog build stays inside the SDK"). `hermes plugins validate .` does not: it only checks prototype patching, `eval`, dynamic `import()` and script tags.
 2. **No build step and no JSX.** Write `jsx()` / `jsxs()` calls. The app loads the file as-is.
-3. **Logic lives in exported pure functions, and the tests cover them:** `ops`, `normalize`, `folderActivity`, `filterView`, `exportLayout`, `importLayout`, `unpinPinnedRow` (both builds; it takes the host so tests can stub `host.sessions.pin`), and in the full build `scrubCorePins` and `isFreshUserChat`. React code stays thin. The test stubs every name the file imports from the SDK, so a new SDK import needs no test change.
+3. **Logic lives in exported pure functions, and the tests cover them:** `ops`, `normalize`, `folderActivity`, `filterView`, `exportLayout`, `importLayout`, `unpinPinnedRow` and `unpinAndReconcile` (both builds; they take the host so tests can stub `host.sessions.pin`), and in the full build `scrubCorePins` and `isFreshUserChat`. React code stays thin. The test stubs every name the file imports from the SDK, so a new SDK import needs no test change.
 4. **Saved layouts never break.** Storage is `ctx.storage` (plugin-scoped). The layout lives at `tree.<connectionId|local>`:
 
    ```js
@@ -50,7 +50,7 @@ Read `graphify-out/GRAPH_REPORT.md` for the hubs and communities. `graphify-out/
    ```
 
    To change the shape, migrate old data inside `normalize()` and add a test for the old form. Exported layouts carry `pinned-folders/layout@1`. Bump that tag only together with an import path for the previous version.
-5. **Pins belong to the backend.** Folders only arrange pinned chats. Catalog Unpin uses only the SDK's `host.sessions.pin(id, false)` (which core syncs to the owning backend); on older Desktop without that method it is disabled with guidance to use Sessions, never a local layout-only unpin. Full Unpin uses its direct backend PATCH + core pin-cache scrub, and full auto-pin also writes the backend.
+5. **Pins belong to the backend.** Folders only arrange pinned chats. Catalog Unpin uses only the SDK's `host.sessions.pin(id, false)` (which core syncs to the owning backend); on older Desktop without that method it is disabled with guidance to use Sessions, never a local layout-only unpin. `pin(id, false)` resolving is not a durable ack (core fires the backend write and swallows its error), so catalog Unpin never forgets folder placement eagerly: it re-reads the pinned rows and prunes placement only once a read no longer lists the id; if the backend keeps the pin, the chat stays in its original folder and order. Full Unpin uses its direct backend PATCH + core pin-cache scrub, whose awaited result is a real ack, so placement is forgotten at once; full auto-pin also writes the backend.
 
 ## Try it live
 
