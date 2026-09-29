@@ -19,7 +19,7 @@ Node 22 or newer. Nothing to install.
 
 ```sh
 node scripts/build.mjs          # → built desktop/plugin.js
-node tests/ops.test.mjs         # catalog build → 75 "ok" lines, exit 0
+node tests/ops.test.mjs         # catalog build → 79 "ok" lines, exit 0
 node tests/ops.test.mjs full    # full build   → 85 "ok" lines, exit 0
 hermes plugins validate .       # → "Validation passed." (catalog admission; not an SDK-only proof)
 ```
