@@ -120,10 +120,32 @@ if (FULL) {
   // Allowed host imports are codified in AGENTS.md rule 1: @hermes/plugin-sdk, react,
   // react/jsx-runtime (the app's loader provides exactly these at runtime). Enforce the
   // enumeration itself so a new third-party import is red, not a reviewer judgment call.
-  const importSources = [...src.matchAll(/from\s*'([^']+)'/g)].map(m => m[1])
+  // The extractor covers every module-source form: `from 'x'|x"|x\``, bare
+  // `import 'x'`, dynamic `import('x')`, and `require('x')`.
+  // ONE extractor, shared by the gate and its canary, so the canary tests what the gate runs.
+  const IMPORT_SOURCE = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+|\brequire\s*\(\s*)(['"`])([^'"`]+)\1/g
+  const extractImportSources = text => [...text.matchAll(IMPORT_SOURCE)].map(m => m[2])
   const allowed = new Set(['@hermes/plugin-sdk', 'react', 'react/jsx-runtime'])
-  const rogue = [...new Set(importSources)].filter(s => !allowed.has(s))
+  const rogueImports = text => [...new Set(extractImportSources(text))].filter(s => !allowed.has(s)).sort()
+  const importSources = extractImportSources(src)
+  // Liveness: the parser must actually find the known sources — zero matches must never pass.
+  assert(importSources.includes('@hermes/plugin-sdk'), 'import gate is live: extractor finds @hermes/plugin-sdk in the catalog build')
+  const rogue = rogueImports(src)
   assert(!rogue.length, 'catalog build imports only host-provided modules (AGENTS.md rule 1), found: ' + rogue.join(', '))
+  // Canary: the same extractor must catch every forbidden form on a fixture.
+  const canary = [
+    `import { a } from "dquoted-mod"`,
+    "import 'bare-side-effect-mod'",
+    "const m = await import(`dynamic-template-mod`)",
+    "const r = require('required-mod')",
+    "import ok from 'react'" // the one legal line, proving the canary isn't just match-anything
+  ].join('\n')
+  // Through the same `allowed` filter: rogue must be EXACTLY the forbidden modules, so a
+  // missed form fails and so does the legal react line being flagged.
+  const canaryRogue = rogueImports(canary).join()
+  const canaryWant = ['bare-side-effect-mod', 'dquoted-mod', 'dynamic-template-mod', 'required-mod'].sort().join()
+  assert(canaryRogue === canaryWant, 'import gate canary: rogue set is exactly the forbidden fixture modules (got: ' + canaryRogue + ')')
+  assert(extractImportSources(canary).includes('react'), 'import gate canary sees the legal react line and leaves it unflagged')
   assert(!('scrubCorePins' in mod) && !('isFreshUserChat' in mod), 'catalog build has no full-only pin cache/auto-pin code')
   assert(typeof mod.unpinPinnedRow === 'function', 'catalog build exports the unpin path')
 
