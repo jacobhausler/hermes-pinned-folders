@@ -120,10 +120,29 @@ if (FULL) {
   // Allowed host imports are codified in AGENTS.md rule 1: @hermes/plugin-sdk, react,
   // react/jsx-runtime (the app's loader provides exactly these at runtime). Enforce the
   // enumeration itself so a new third-party import is red, not a reviewer judgment call.
-  const importSources = [...src.matchAll(/from\s*'([^']+)'/g)].map(m => m[1])
+  // The extractor covers every module-source form: `from 'x'|x"|x\``, bare
+  // `import 'x'`, dynamic `import('x')`, and `require('x')`.
+  const importSources = [...src.matchAll(
+    /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+|\brequire\s*\(\s*)(['"`])([^'"`]+)\1/g
+  )].map(m => m[2])
   const allowed = new Set(['@hermes/plugin-sdk', 'react', 'react/jsx-runtime'])
+  // Liveness: the parser must actually find the known sources — zero matches must never pass.
+  assert(importSources.includes('@hermes/plugin-sdk'), 'import gate is live: extractor finds @hermes/plugin-sdk in the catalog build')
   const rogue = [...new Set(importSources)].filter(s => !allowed.has(s))
   assert(!rogue.length, 'catalog build imports only host-provided modules (AGENTS.md rule 1), found: ' + rogue.join(', '))
+  // Canary: the same extractor must catch every forbidden form on a fixture.
+  const canary = [
+    `import { a } from "dquoted-mod"`,
+    "import 'bare-side-effect-mod'",
+    "const m = await import(`dynamic-template-mod`)",
+    "const r = require('required-mod')",
+    "import ok from 'react'" // the one legal line, proving the canary isn't just match-anything
+  ].join('\n')
+  const canaryFound = [...canary.matchAll(
+    /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+|\brequire\s*\(\s*)(['"`])([^'"`]+)\1/g
+  )].map(m => m[2])
+  const canaryMissed = ['dquoted-mod', 'bare-side-effect-mod', 'dynamic-template-mod', 'required-mod', 'react'].filter(s => !canaryFound.includes(s))
+  assert(!canaryMissed.length, 'import gate canary catches every forbidden import form (missed: ' + canaryMissed.join(', ') + ')')
   assert(!('scrubCorePins' in mod) && !('isFreshUserChat' in mod), 'catalog build has no full-only pin cache/auto-pin code')
   assert(typeof mod.unpinPinnedRow === 'function', 'catalog build exports the unpin path')
 
