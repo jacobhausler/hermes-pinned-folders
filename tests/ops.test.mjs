@@ -320,6 +320,14 @@ assert(JSON.stringify(normalize(JSON.parse(JSON.stringify(R))).view) === JSON.st
 const C = ops.collapseAll(ops.addFolder(V, 'w', 'Sub', 'sub'))
 assert(C.collapsed.w && C.collapsed.sub && C.collapsed.__unsorted, 'collapse all closes every folder and Unsorted')
 
+// ── single-folder toggle (the caret click path) ──
+let TG = ops.addFolder(ops.addFolder(normalize(null), null, 'Top', 'top'), 'top', 'Mid', 'mid')
+TG = ops.toggle(TG, 'mid')
+assert(TG.collapsed.mid === true && !('top' in TG.collapsed), 'toggle collapses just the clicked folder')
+TG = ops.toggle(TG, 'mid')
+assert(!('mid' in TG.collapsed), 'toggle again re-expands it')
+assert(JSON.stringify(ops.toggle(normalize(null), 'ghost').collapsed) === '{"ghost":true}', 'toggle only ever writes the clicked id\'s key')
+
 // ── #13 review: Collapse all under a filter (F1), Open all = visible rows (F2) ──
 const { collapseAllItem, chatsBeneath, visibleRows } = mod
 let collapsed = 0
