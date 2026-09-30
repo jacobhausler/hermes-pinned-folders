@@ -9,7 +9,7 @@ Start here if you are an agent working on this repo. The plugin is two files bui
 | `full/plugin.js` | **The source. Edit this one.** Plain ESM, loaded by Hermes Desktop uncompiled. |
 | `desktop/plugin.js` | Catalog build, **generated**. Never edit by hand. |
 | `scripts/build.mjs` | Writes `desktop/plugin.js` by deleting every `// #full` … `// #end` block. |
-| `tests/ops.test.mjs` | Tests the pure functions in either build. |
+| `tests/ops.test.mjs` | Tests the pure functions in either build; the catalog pass also checks `SECURITY.md` and the issue templates. |
 | `plugin.yaml` | Manifest: name, version, description. |
 | `docs/*.png` | README screenshots. `catalog-*.png` show the catalog build. |
 
@@ -19,7 +19,7 @@ Node 22 or newer. Nothing to install.
 
 ```sh
 node scripts/build.mjs          # → built desktop/plugin.js
-node tests/ops.test.mjs         # catalog build → 79 "ok" lines, exit 0
+node tests/ops.test.mjs         # catalog build → 82 "ok" lines, exit 0
 node tests/ops.test.mjs full    # full build   → 85 "ok" lines, exit 0
 hermes plugins validate .       # → "Validation passed." (catalog admission; not an SDK-only proof)
 ```

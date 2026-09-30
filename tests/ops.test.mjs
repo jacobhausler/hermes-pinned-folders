@@ -340,3 +340,20 @@ assert(chatsBeneath('w', gIn, gKids, gUnread).map(r => r.id).join() === 'u1,u2',
 const gText = narrowView(G, gr, 'old', G.view, 'default')
 assert(chatsBeneath('w', gIn, gKids, gText).map(r => r.id).join() === 'r2', 'open all as tabs under the text filter opens only the visible rows')
 assert(visibleRows(gIn.get('w'), gUnread).map(r => r.id).join() === 'u1', 'the render selector and open all share visibleRows')
+
+// Public-repo standard (issue #18): the private security route and the issue forms.
+// Field-level checks only, run once (catalog pass). GitHub reads these files as config.
+if (!FULL) {
+  const repoFile = p => { try { return readFileSync(new URL('../' + p, import.meta.url), 'utf8') } catch { return '' } }
+  const sec = repoFile('SECURITY.md')
+  assert(sec.includes('/security/advisories/new') && /^#+\s*supported versions/im.test(sec) && /latest release/i.test(sec) && /within \d+ (?:business )?(?:hours?|days?)/i.test(sec),
+    'SECURITY.md: private vulnerability reporting link, supported versions (latest release), response time')
+  const cfg = repoFile('.github/ISSUE_TEMPLATE/config.yml')
+  assert(/^blank_issues_enabled:\s*false\s*$/m.test(cfg) && /^\s*url:\s*\S*(?:SECURITY\.md|\/security\/policy)\s*$/m.test(cfg),
+    'issue chooser: blank issues off, security reports routed to SECURITY.md')
+  const bug = repoFile('.github/ISSUE_TEMPLATE/bug_report.md')
+  const front = /^---\n([\s\S]*?)\n---\n/.exec(bug)?.[1] ?? ''
+  const asks = ['hermes version', 'plugin version', 'steps to reproduce', 'expected', 'actual'].filter(k => !bug.toLowerCase().includes(k))
+  assert(/^name:\s*\S/m.test(front) && /^about:\s*\S/m.test(front) && !/^labels:/m.test(front) && !asks.length,
+    'bug template: name/about front matter, no auto-label (triage stays with the maintainer), asks ' + (asks.length ? 'MISSING ' + asks.join(', ') : 'Hermes version, plugin version, steps, expected vs actual'))
+}
