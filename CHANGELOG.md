@@ -3,6 +3,20 @@
 All notable changes to this plugin. Versions follow `plugin.yaml`; each release is a
 `vX.Y.Z` tag and a catalog entry pinned to that tag's commit.
 
+## [0.1.2] - 2026-10-01
+
+Test/docs hardening release. `desktop/plugin.js` and `full/plugin.js` are byte-identical
+to `v0.1.1` (sha256-verified); `plugin.yaml` changes only its `version` literal — no
+shipped-code change.
+
+### Maintenance
+- Codify the host-import allow-list in the catalog gate (#15, @jacobhausler)
+- Widen the import-gate extractor and prove it live with a parser canary (#16, @jacobhausler)
+- AGENTS.md catalog gate count 75 → 79 (#17, @jacobhausler)
+- SECURITY.md and issue templates (public-repo standard, closes #18) (#19, @jacobhausler)
+- Cover `ops.toggle`, the single-folder collapse path (#20, @jacobhausler)
+- Unit-test the `strip()` parser that produces the catalog build, with a live canary (#21, @jacobhausler)
+
 ## [0.1.1] - 2026-09-28
 
 ### Added
@@ -39,5 +53,6 @@ which uses only the SDK.
 - repo-admin standard: path-scoped CI `gates` check, CONTRIBUTING with the review
   checklist, PR template (#2, @jacobhausler)
 
+[0.1.2]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.2
 [0.1.1]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.1
 [0.1.0]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.0
