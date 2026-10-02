@@ -297,6 +297,18 @@ const loaded = normalize(JSON.parse(JSON.stringify(legacy)))
 assert(JSON.stringify(loaded.view) === JSON.stringify(DEFAULT_VIEW), 'old layout without view state loads with default view')
 assert(JSON.stringify({ ...loaded, view: undefined }) === JSON.stringify({ ...legacy, view: undefined }), 'old layout keeps folders, colors, placement, order, collapse unchanged')
 assert(JSON.stringify(normalizeView({ order: 'sideways', status: 42, unreadOnly: 'yes' })) === JSON.stringify(DEFAULT_VIEW), 'garbage view values fall back to defaults')
+// viewFilters / viewIsDefault: the menu's enable lines. Order is not a filter,
+// so the two predicates differ exactly on `order` — pin the seam.
+const { viewFilters, viewIsDefault } = mod
+assert(viewFilters(normalize(null).view) === false && viewIsDefault(normalize(null).view) === true, 'a fresh view filters nothing and reads as default (Reset view disabled)')
+assert(viewFilters({ order: 'recent', unreadOnly: false, status: 'all', profile: 'all' }) === false, 'ordering Most recent alone filters nothing')
+assert(viewIsDefault({ order: 'recent', unreadOnly: false, status: 'all', profile: 'all' }) === false, '...but the view is no longer default (Reset view enabled)')
+for (const patch of [{ unreadOnly: true }, { status: 'unread' }, { status: 'working' }, { profile: 'current' }]) {
+  const v = { ...DEFAULT_VIEW, ...patch }
+  assert(viewFilters(v) === true && viewIsDefault(v) === false, `${JSON.stringify(patch)} is both a filter and a departure from default`)
+}
+assert(viewFilters({ order: 'sideways', status: 42, unreadOnly: 'yes' }) === false && viewIsDefault({ order: 'sideways', status: 42, unreadOnly: 'yes' }) === true, 'a garbage view normalises to default before either predicate reads it')
+assert(viewIsDefault(ops.resetView(ops.setView(normalize(null), { unreadOnly: true, order: 'recent' })).view) === true, 'Reset view lands a dirtied view back on the default')
 const recRows = [{ id: 'old', last_active: 100 }, { id: 'mid', last_active: 200 }, { id: 'new', last_active: 300 }]
 assert(orderRows(recRows, ['old', 'new', 'mid'], 'manual').map(r => r.id).join() === 'old,new,mid', 'ordering Manual follows the dragged order')
 assert(orderRows(recRows, ['old', 'new', 'mid'], 'recent').map(r => r.id).join() === 'new,mid,old', 'ordering Most recent sorts by last activity')
