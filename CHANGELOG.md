@@ -3,6 +3,17 @@
 All notable changes to this plugin. Versions follow `plugin.yaml`; each release is a
 `vX.Y.Z` tag and a catalog entry pinned to that tag's commit.
 
+## [0.1.3] - 2026-10-03
+
+Tests-only hardening release: the shipped plugin is byte-identical to `v0.1.2`
+(`git diff v0.1.2..HEAD -- plugin.yaml desktop/ full/ scripts/` is empty apart from
+this release's `version` literal; `desktop/plugin.js` and `full/plugin.js` are
+unchanged). No behavior change.
+
+### Maintenance
+- Cover `viewFilters` + `viewIsDefault`, the menu's two enable predicates, incl. the
+  `order`-only seam and `ops.resetView` round-trip (#23, @jacobhausler)
+
 ## [0.1.2] - 2026-10-01
 
 Test/docs hardening release. `desktop/plugin.js` and `full/plugin.js` are byte-identical
@@ -53,6 +64,7 @@ which uses only the SDK.
 - repo-admin standard: path-scoped CI `gates` check, CONTRIBUTING with the review
   checklist, PR template (#2, @jacobhausler)
 
+[0.1.3]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.3
 [0.1.2]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.2
 [0.1.1]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.1
 [0.1.0]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.0
