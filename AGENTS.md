@@ -10,6 +10,7 @@ Start here if you are an agent working on this repo. The plugin is two files bui
 | `desktop/plugin.js` | Catalog build, **generated**. Never edit by hand. |
 | `scripts/build.mjs` | Writes `desktop/plugin.js` by deleting every `// #full` … `// #end` block. |
 | `tests/ops.test.mjs` | Tests the pure functions in either build; the catalog pass also checks `SECURITY.md` and the issue templates. |
+| `tests/build.test.mjs` | Tests the `strip()` parser that produces the catalog build, incl. a live canary: `strip(full/plugin.js)` must equal `desktop/plugin.js` byte-for-byte. |
 | `plugin.yaml` | Manifest: name, version, description. |
 | `docs/*.png` | README screenshots. `catalog-*.png` show the catalog build. |
 
@@ -19,12 +20,13 @@ Node 22 or newer. Nothing to install.
 
 ```sh
 node scripts/build.mjs          # → built desktop/plugin.js
+node tests/build.test.mjs    # strip() parser → 10 "ok" lines, exit 0
 node tests/ops.test.mjs         # catalog build → 94 "ok" lines, exit 0
 node tests/ops.test.mjs full    # full build   → 97 "ok" lines, exit 0
 hermes plugins validate .       # → "Validation passed." (catalog admission; not an SDK-only proof)
 ```
 
-A change is done when all four pass and `git diff desktop/plugin.js` shows only what the build wrote.
+A change is done when all five pass (including `node tests/build.test.mjs`) and `git diff desktop/plugin.js` shows only what the build wrote.
 
 ## Code graph (optional)
 
