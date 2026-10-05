@@ -50,7 +50,8 @@ R3 **SDK-only desktop** — `desktop/plugin.js` imports only `@hermes/plugin-sdk
     `document`, `eval`, dynamic `import()`.
 R4 **Stdlib backend** — no new Python dependency; no self-updater (catalog rule 3).
 R5 **Manifest parity** — `plugin.yaml` `provides_*` matches `register()` exactly;
-    version bumped only by the release lane.
+    version bumped only by the release lane (PUBLIC release only — never a gate on
+    local dogfood installs of our own packages, see release-train scope).
 R6 **Tests** — a behaviour change ships its check (one failing-if-broken test; no
     snapshot/change-detector tests; no test reads source text).
 R7 **Docs drift** — user-visible strings/flags changed → README/AGENTS.md/SKILL.md
