@@ -78,6 +78,12 @@ jobs:
           sudo ln -sfn /tmp/hermes-agent /opt/hermes
           hermes --version
 
+      # The pin cannot silently rot: every @hermes/plugin-sdk import the catalog
+      # build makes must exist in the pinned checkout's sdk/index.ts.
+      - name: SDK contract holds at the pin
+        if: steps.cls.outputs.docs_only == 'false'
+        run: node scripts/sdk-contract.mjs /tmp/hermes-agent
+
       - name: Desktop half parses as ESM
         if: steps.cls.outputs.docs_only == 'false'
         run: cp desktop/plugin.js /tmp/plugin.check.mjs && node --check /tmp/plugin.check.mjs

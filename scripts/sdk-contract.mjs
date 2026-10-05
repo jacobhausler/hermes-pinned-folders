@@ -56,7 +56,7 @@ function resolveName(name, module, depth = 0) {
   const text = readTs(stem)
   if (text === null) return false
   if (declares(name, text)) return true
-  if (/export\s*\*\s*(?:as\s+\w+\s*)?from/.test(text)) return true // plain star re-export: counts
+  if (/export\s*\*\s*from/.test(text)) return true // plain star re-export: counts (a namespaced `export * as x from` does not)
   for (const m of text.matchAll(/export\s*\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/gs)) {
     const ns = m[1].split(',').map(x => x.trim().replace(/^type\s+/, '').split(/\s+as\s+/)[0].trim()).filter(Boolean)
     if (ns.includes(name) && resolveName(name, m[2], depth + 1)) return true
@@ -71,9 +71,9 @@ const missing = names.filter(n => {
     const ns = m[1].split(',').map(x => x.trim().replace(/^type\s+/, '').split(/\s+as\s+/)[0].trim()).filter(Boolean)
     if (ns.includes(n) && resolveName(n, m[2])) return false
   }
-  if (/export\s*\*\s*(?:as\s+\w+\s*)?from/.test(top)) return false
+  if (/export\s*\*\s*from/.test(top)) return false // plain star re-export: counts
   return true
 })
-for (const n of names) console.log('ok', n)
+for (const n of names) if (!missing.includes(n)) console.log('ok', n)
 if (missing.length) { console.log('MISSING: ' + missing.join(', ')); process.exit(1) }
 console.log(`sdk-contract: OK (${names.length} imports resolved at the pin)`)
