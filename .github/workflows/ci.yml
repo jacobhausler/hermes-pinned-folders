@@ -22,7 +22,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  HERMES_PIN: "345cd2b057a452236de401d3534b8502a7465e8d"   # v2026.9.14
+  HERMES_PIN: "f97608f178d1ffeca59860195ab7da295f7c8e5f"   # v2026.9.24
 
 jobs:
   gates:
@@ -77,6 +77,12 @@ jobs:
           pip install --quiet -e /tmp/hermes-agent
           sudo ln -sfn /tmp/hermes-agent /opt/hermes
           hermes --version
+
+      # The pin cannot silently rot: every @hermes/plugin-sdk import the catalog
+      # build makes must exist in the pinned checkout's sdk/index.ts.
+      - name: SDK contract holds at the pin
+        if: steps.cls.outputs.docs_only == 'false'
+        run: node scripts/sdk-contract.mjs /tmp/hermes-agent
 
       - name: Desktop half parses as ESM
         if: steps.cls.outputs.docs_only == 'false'
