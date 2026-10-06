@@ -128,7 +128,7 @@ if (FULL) {
   const allowed = new Set(['@hermes/plugin-sdk', 'react', 'react/jsx-runtime'])
   const rogueImports = text => [...new Set(extractImportSources(text))].filter(s => !allowed.has(s)).sort()
   const importSources = extractImportSources(src)
-  // Liveness: the parser must actually find the known sources — zero matches must never pass.
+  // Liveness: the parser must actually find the known sources — no matches must ever pass.
   assert(importSources.includes('@hermes/plugin-sdk'), 'import gate is live: extractor finds @hermes/plugin-sdk in the catalog build')
   const rogue = rogueImports(src)
   assert(!rogue.length, 'catalog build imports only host-provided modules (AGENTS.md rule 1), found: ' + rogue.join(', '))
@@ -290,16 +290,17 @@ assert(menu.find(it => it.label === 'Unpin').onSelect === menuAct.unpin, 'menu U
 const oldMenu = chatMenuItems({ id: 's1' }, { fid: null, flat: [], canUnpin: false, act: menuAct })
 assert(oldMenu.find(it => /^Unpin/.test(it.label || '')).disabled === true, 'menu Unpin stays disabled with guidance when unpin is unavailable')
 
-// ── click gestures + chatMenuItems: the previously-zero-coverage batch ──
-// pinnedRowClick / handlePinnedRowClick / chatMenuItems are exported by BOTH
-// builds; these assertions use only entries the #full fences leave in the
-// catalog build (Rename / Mark read / Archive are full-only).
+// ── click gestures + chatMenuItems: delta batch — complements the #12-era
+// click tests above. That block already covers bare/shift/meta clicks through
+// the spies and the basic menu labels; this batch adds only the delta: the
+// ctrl gesture, handlePinnedRowClick return values + consume flags per path,
+// the Move to header, per-folder indent/disabled, the Unsorted pair, the
+// canUnpin=false guidance label, Delete destructive, and Open-in-new-tab
+// routing. Exported by BOTH builds; these assertions use only entries the
+// #full fences leave in the catalog build (Rename / Mark read / Archive are
+// full-only).
 const GD = { altKey: false, ctrlKey: false, metaKey: false, shiftKey: false }
-assert(pinnedRowClick({ ...GD, altKey: true, shiftKey: true }) === 'open', 'gesture: alt+shift routes to open (core archive combo degrades to open)')
-assert(pinnedRowClick({ ...GD, metaKey: true }) === 'tab', 'gesture: meta opens in a new tab')
 assert(pinnedRowClick({ ...GD, ctrlKey: true }) === 'tab', 'gesture: ctrl opens in a new tab')
-assert(pinnedRowClick({ ...GD, shiftKey: true }) === 'unpin', 'gesture: shift-only unpins')
-assert(pinnedRowClick({ ...GD }) === 'open', 'gesture: a bare click opens')
 {
   const spy = { opens: [], unpins: 0, prevented: 0, stopped: 0 }
   const ev = { ...GD, shiftKey: true, preventDefault: () => spy.prevented++, stopPropagation: () => spy.stopped++ }
@@ -330,9 +331,13 @@ assert(pinnedRowClick({ ...GD }) === 'open', 'gesture: a bare click opens')
   assert(chatMenuItems({ id: 's1' }, { fid: null, flat: [], canUnpin: true, act: menuAct }).find(it => it.label === 'Unsorted').disabled === true,
     'Unsorted is disabled when the chat is already Unsorted (fid === ROOT)')
   const noUnpin = chatMenuItems({ id: 's1' }, { fid: null, flat: [], canUnpin: false, act: menuAct }).find(it => /^Unpin/.test(it.label || ''))
-  assert(/update Desktop/i.test(noUnpin.label) && noUnpin.disabled === true,
-    'canUnpin=false: Unpin label names the fix (update Desktop) and is disabled')
+  assert(/update Desktop/i.test(noUnpin.label),
+    'canUnpin=false: Unpin label names the fix (update Desktop)')
   assert(fm.find(it => it.label === 'Delete…').destructive === true, "Delete… is the menu's destructive entry")
+  const tabCalls = []
+  chatMenuItems({ id: 's1' }, { fid: 'i', flat, canUnpin: true, act: { ...menuAct, open: i => tabCalls.push(i) } })
+    .find(it => it.label === 'Open in new tab').onSelect()
+  assert(tabCalls.join() === 'tab', "chatMenuItems 'Open in new tab' routes act.open('tab')")
 }
 // ── filter menu: view state (#12) ──
 const { normalizeView, narrowView, orderRows, applyView, DEFAULT_VIEW } = mod
