@@ -128,7 +128,7 @@ if (FULL) {
   const allowed = new Set(['@hermes/plugin-sdk', 'react', 'react/jsx-runtime'])
   const rogueImports = text => [...new Set(extractImportSources(text))].filter(s => !allowed.has(s)).sort()
   const importSources = extractImportSources(src)
-  // Liveness: the parser must actually find the known sources — zero matches must never pass.
+  // Liveness: the parser must actually find the known sources — no matches must ever pass.
   assert(importSources.includes('@hermes/plugin-sdk'), 'import gate is live: extractor finds @hermes/plugin-sdk in the catalog build')
   const rogue = rogueImports(src)
   assert(!rogue.length, 'catalog build imports only host-provided modules (AGENTS.md rule 1), found: ' + rogue.join(', '))
@@ -290,6 +290,55 @@ assert(menu.find(it => it.label === 'Unpin').onSelect === menuAct.unpin, 'menu U
 const oldMenu = chatMenuItems({ id: 's1' }, { fid: null, flat: [], canUnpin: false, act: menuAct })
 assert(oldMenu.find(it => /^Unpin/.test(it.label || '')).disabled === true, 'menu Unpin stays disabled with guidance when unpin is unavailable')
 
+// ── click gestures + chatMenuItems: delta batch — complements the #12-era
+// click tests above. That block already covers bare/shift/meta clicks through
+// the spies and the basic menu labels; this batch adds only the delta: the
+// ctrl gesture, handlePinnedRowClick return values + consume flags per path,
+// the Move to header, per-folder indent/disabled, the Unsorted pair, the
+// canUnpin=false guidance label, Delete destructive, and Open-in-new-tab
+// routing. Exported by BOTH builds; these assertions use only entries the
+// #full fences leave in the catalog build (Rename / Mark read / Archive are
+// full-only).
+const GD = { altKey: false, ctrlKey: false, metaKey: false, shiftKey: false }
+assert(pinnedRowClick({ ...GD, ctrlKey: true }) === 'tab', 'gesture: ctrl opens in a new tab')
+{
+  const spy = { opens: [], unpins: 0, prevented: 0, stopped: 0 }
+  const ev = { ...GD, shiftKey: true, preventDefault: () => spy.prevented++, stopPropagation: () => spy.stopped++ }
+  const ret = handlePinnedRowClick(ev, { open: i => spy.opens.push(i), unpin: () => spy.unpins++ })
+  assert(ret === 'unpin' && spy.unpins === 1 && spy.prevented === 1 && spy.stopped === 1 && !spy.opens.length,
+    'handlePinnedRowClick unpin path: unpin() + preventDefault + stopPropagation, no open, returns the action')
+  const spy2 = { opens: [], prevented: 0, stopped: 0 }
+  const ret2 = handlePinnedRowClick({ ...GD, ctrlKey: true, preventDefault: () => spy2.prevented++, stopPropagation: () => spy2.stopped++ }, { open: i => spy2.opens.push(i), unpin: () => spy.unpins++ })
+  assert(ret2 === 'tab' && spy2.opens.join() === 'tab' && !spy2.prevented && !spy2.stopped,
+    'handlePinnedRowClick modifier path: open("tab"), returns tab, consumes nothing, never unpins')
+  const spy3 = { opens: [] }
+  const ret3 = handlePinnedRowClick({ ...GD, preventDefault: () => {}, stopPropagation: () => {} }, { open: i => spy3.opens.push(i), unpin: () => spy.unpins++ })
+  assert(ret3 === 'open' && spy3.opens.length === 1 && spy3.opens[0] === undefined,
+    'handlePinnedRowClick plain path: open() with undefined intent (not "tab"), returns open')
+}
+{
+  // Flat tree mirroring the pane's render order: Work (depth 0) > Infra (depth 1),
+  // with the row currently living in Infra.
+  const flat = [{ f: { id: 'w', name: 'Work' }, depth: 0 }, { f: { id: 'i', name: 'Infra' }, depth: 1 }]
+  const fm = chatMenuItems({ id: 's1' }, { fid: 'i', flat, canUnpin: true, act: menuAct })
+  assert(fm.some(it => it && it.header === 'Move to'), 'chatMenuItems carries the Move to section header')
+  const folderItems = fm.filter(it => it && it.icon === 'folder')
+  assert(folderItems.length === flat.length && folderItems.map(it => it.indent).join() === '0,1',
+    'Move to renders one item per flat folder, indented by tree depth')
+  assert(folderItems.find(it => it.label === 'Infra').disabled === true && folderItems.find(it => it.label === 'Work').disabled === false,
+    "the chat's current folder (f.id === fid) is the only disabled Move-to entry")
+  assert(fm.find(it => it.label === 'Unsorted').disabled === false, 'Unsorted is enabled while the chat sits in a folder')
+  assert(chatMenuItems({ id: 's1' }, { fid: null, flat: [], canUnpin: true, act: menuAct }).find(it => it.label === 'Unsorted').disabled === true,
+    'Unsorted is disabled when the chat is already Unsorted (fid === ROOT)')
+  const noUnpin = chatMenuItems({ id: 's1' }, { fid: null, flat: [], canUnpin: false, act: menuAct }).find(it => /^Unpin/.test(it.label || ''))
+  assert(/update Desktop/i.test(noUnpin.label),
+    'canUnpin=false: Unpin label names the fix (update Desktop)')
+  assert(fm.find(it => it.label === 'Delete…').destructive === true, "Delete… is the menu's destructive entry")
+  const tabCalls = []
+  chatMenuItems({ id: 's1' }, { fid: 'i', flat, canUnpin: true, act: { ...menuAct, open: i => tabCalls.push(i) } })
+    .find(it => it.label === 'Open in new tab').onSelect()
+  assert(tabCalls.join() === 'tab', "chatMenuItems 'Open in new tab' routes act.open('tab')")
+}
 // ── filter menu: view state (#12) ──
 const { normalizeView, narrowView, orderRows, applyView, DEFAULT_VIEW } = mod
 const legacy = { folders: [{ id: 'w', name: 'Work', parent: null, color: 'hsl(1 2% 3%)' }], placed: { a: 'w' }, order: ['a'], collapsed: { w: true }, foldersOrdered: true }
