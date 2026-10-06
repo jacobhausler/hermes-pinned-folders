@@ -3,6 +3,17 @@
 All notable changes to this plugin. Versions follow `plugin.yaml`; each release is a
 `vX.Y.Z` tag and a catalog entry pinned to that tag's commit.
 
+## [0.1.4] - 2026-10-06
+
+Docs + CI-floor release: the shipped plugin is byte-identical to `v0.1.3`
+(`git diff v0.1.3..HEAD -- plugin.yaml desktop/ full/` is empty apart from this
+release's `version` literal). No behavior change.
+
+### Maintenance
+- AGENTS.md commands now include the `build.test.mjs` gate CI runs (#32, @jacobhausler)
+- Raise the HERMES floor to v2026.9.24 and add the SDK-contract gate at the pin (4606a74, est-l6w3, @jacobhausler)
+- CONTRIBUTING.md R5 PUBLIC-release-only carve-out (skills house 58ff35f) (#35, @jacobhausler)
+
 ## [0.1.3] - 2026-10-03
 
 Tests-only hardening release: the shipped plugin is byte-identical to `v0.1.2`
@@ -64,6 +75,7 @@ which uses only the SDK.
 - repo-admin standard: path-scoped CI `gates` check, CONTRIBUTING with the review
   checklist, PR template (#2, @jacobhausler)
 
+[0.1.4]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.4
 [0.1.3]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.3
 [0.1.2]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.2
 [0.1.1]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.1
