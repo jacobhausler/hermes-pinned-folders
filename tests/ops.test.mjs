@@ -361,6 +361,15 @@ assert(viewIsDefault(ops.resetView(ops.setView(normalize(null), { unreadOnly: tr
 const recRows = [{ id: 'old', last_active: 100 }, { id: 'mid', last_active: 200 }, { id: 'new', last_active: 300 }]
 assert(orderRows(recRows, ['old', 'new', 'mid'], 'manual').map(r => r.id).join() === 'old,new,mid', 'ordering Manual follows the dragged order')
 assert(orderRows(recRows, ['old', 'new', 'mid'], 'recent').map(r => r.id).join() === 'new,mid,old', 'ordering Most recent sorts by last activity')
+// orderRows edges: unranked rows sink to the tail in recency order; a missing
+// order list is safe; recency falls back to started_at when last_active is absent.
+assert(orderRows([...recRows, { id: 'x', last_active: 400 }], ['new'], 'manual').map(r => r.id).join() === 'new,x,mid,old', 'ordering Manual keeps ranked rows first and sinks unranked ones by recency')
+assert(orderRows(recRows, null, 'manual').map(r => r.id).join() === 'new,mid,old', 'ordering Manual with no order list falls back to recency')
+assert(orderRows([{ id: 'a', started_at: 50 }, { id: 'b', started_at: 60 }], [], 'recent').map(r => r.id).join() === 'b,a', 'recency reads started_at when last_active is absent')
+assert(orderRows([], ['ghost'], 'manual').length === 0, 'ordering an empty list is empty')
+// applyView edges: unreadOnly and status compose; profile trims before compare.
+assert(applyView([{ id: 'u', unread: true }, { id: 'w', is_active: true }, { id: 'uw', unread: true, is_active: true }], { unreadOnly: true, status: 'working' }, 'p').map(r => r.id).join() === 'uw', 'unreadOnly AND status compose (intersection, not union)')
+assert(applyView([{ id: 'sp', profile: '  default  ' }], { profile: 'current' }, 'default').map(r => r.id).join() === 'sp', 'profile Current trims before comparing (padded profile still matches)')
 let V = ops.placeSession(ops.addFolder(normalize(null), null, 'W', 'w'), 'r1', 'w')
 V = ops.placeSession(V, 'u1', 'w')
 const vr = [{ id: 'r1', title: 'read', profile: 'default' }, { id: 'u1', title: 'unread', unread: true, profile: 'work' }, { id: 'act', title: 'busy', is_active: true }]
