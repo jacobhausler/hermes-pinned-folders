@@ -213,6 +213,12 @@ assert(names(o) === 'Alpha,Mid,Zeta', 'legacy layout sorted alphabetically once:
 o = ops.placeFolder(o, 'z', 'a', 'before')
 assert(names(o) === 'Zeta,Alpha,Mid', 'drag Zeta above Alpha: ' + names(o))
 assert(names(normalize(JSON.parse(JSON.stringify(o)))) === 'Zeta,Alpha,Mid', 'custom order survives save/reload (no re-sort)')
+// A hand-edited or half-written save can carry an entry with no name: the
+// one-time alphabetical sort reads .name, so a nameless entry must be dropped,
+// not crash the pane on load (same shape importLayout already refuses).
+const nl = normalize({ folders: [{ id: 'z', name: 'Zed' }, { id: 'noname' }, null, 42, { id: 'a', name: 'Ant' }, { name: 'noid' }], foldersOrdered: false })
+assert(names(nl) === 'Ant,Zed', 'load drops id-less and name-less folder entries instead of crashing')
+assert(nl.placed['noname'] === undefined || nl.folders.length === 2, 'dropped entries leave no renderable ghost folder')
 o = ops.placeFolder(o, 'z', 'm', 'after')
 assert(names(o) === 'Alpha,Mid,Zeta', 'drag Zeta below Mid: ' + names(o))
 o = ops.addFolder(o, 'a', 'Child', 'c')
