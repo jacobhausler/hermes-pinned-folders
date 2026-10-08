@@ -78,7 +78,7 @@ const empty = () => ({ folders: [], placed: {}, order: [], collapsed: {}, folder
 // Layouts saved before the filter menu have no `view`: they get the defaults.
 export function normalize(v) {
   if (!v || typeof v !== 'object') return empty()
-  let folders = Array.isArray(v.folders) ? v.folders.filter(f => f && typeof f.id === 'string') : []
+  let folders = Array.isArray(v.folders) ? v.folders.filter(f => f && typeof f.id === 'string' && typeof f.name === 'string') : []
   if (v.foldersOrdered !== true) folders = [...folders].sort(byName)
   return {
     folders,
