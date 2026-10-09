@@ -133,6 +133,34 @@ if (FULL) {
   const fullFail = await mod.unpinAndReconcile({ id: 's2', profile: 'p1' }, { refresh: async () => null, forget: id => fullForgot.push(id), notifyError: e => fullErrs.push(e.message) })
   delete globalThis.window
   assert(fullFail === 'failed' && !fullForgot.length && fullErrs.join() === 'patch boom', 'full unpin: PATCH rejection -> placement kept + notifyError')
+
+  // ── unpin -> tombstone -> expiry contract (full-only; same window stub harness) ──
+  const { pinIdsOf, tombstoned } = mod
+  assert(JSON.stringify(pinIdsOf({ id: 't1', _lineage_root_id: 'troot' })) === '["t1","troot"]',
+    'pinIdsOf carries the row id plus its lineage root')
+  assert(JSON.stringify(pinIdsOf({ id: 't1' })) === '["t1"]', 'pinIdsOf on a row without lineage is just the id')
+  const tombPatchCalls = []
+  const tombStorage = new Map([['hermes.desktop.pinnedSessions', JSON.stringify(['t1', 'troot', 'keep'])]])
+  globalThis.window = {
+    hermesDesktop: { api: async opts => { tombPatchCalls.push(opts) } },
+    localStorage: {
+      get length() { return tombStorage.size },
+      key: i => [...tombStorage.keys()][i],
+      getItem: k => tombStorage.get(k) ?? null,
+      setItem: (k, v) => tombStorage.set(k, v)
+    }
+  }
+  await mod.unpinPinnedRow({ id: 't1', _lineage_root_id: 'troot' }, { sessions: { pin: () => { throw new Error('full unpin must not use the SDK pin verb') } } })
+  delete globalThis.window
+  const t0 = Date.now()
+  assert(tombPatchCalls.length === 1 && tombPatchCalls[0].body.pinned === false, 'tombstone setup: the unpin PATCH went out')
+  assert(tombstoned({ id: 't1', _lineage_root_id: 'troot' }, t0 + 30_000) === true,
+    'just-unpinned row reads as tombstoned within TOMBSTONE_MS (ids incl. lineage root)')
+  const stillPinned = JSON.parse(tombStorage.get('hermes.desktop.pinnedSessions') || '[]')
+  assert(!stillPinned.includes('t1') && !stillPinned.includes('troot') && stillPinned.join() === 'keep',
+    'unpin scrubbed t1 + troot from core pin cache (scrubTombstones ran)')
+  assert(tombstoned({ id: 't1' }, t0 + 61_000) === false, 'tombstone expires past TOMBSTONE_MS=60_000 -> row shows again')
+  assert(tombstoned({ id: 'never', _lineage_root_id: 'nope' }, t0 + 30_000) === false, 'never-unpinned row is never tombstoned')
 } else {
   const leaks = ['hermesDesktop', 'localStorage', 'querySelector', 'MutationObserver', 'BroadcastChannel', 'composer.middleware', 'translateNow'].filter(w => src.includes(w))
   if (/\bdocument\s*\./.test(src.replace(/^\s*(\/\/|\*).*$/gm, ''))) leaks.push('document')

@@ -483,7 +483,7 @@ const CORE_PIN_KEY = 'hermes.desktop.pinnedSessions'
 const TOMBSTONE_MS = 60_000
 const tombstones = new Map() // pinId -> unpinned-at
 
-function pinIdsOf(row) {
+export function pinIdsOf(row) {
   return [row.id, row._lineage_root_id].filter(Boolean)
 }
 
@@ -511,7 +511,7 @@ export function scrubCorePins(storage, ids) {
 
 // Fresh tombstone: this page predates our PATCH. Old tombstone + pinned
 // row: the user re-pinned it in core; honour that.
-function tombstoned(s, now) {
+export function tombstoned(s, now) {
   const ids = pinIdsOf(s)
   const at = Math.max(0, ...ids.map(id => tombstones.get(id) || 0))
   if (!at) return false
