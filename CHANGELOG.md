@@ -3,6 +3,24 @@
 All notable changes to this plugin. Versions follow `plugin.yaml`; each release is a
 `vX.Y.Z` tag and a catalog entry pinned to that tag's commit.
 
+## [0.1.5] - 2026-10-09
+
+Bugfix + tests release: `normalize()` now drops folder entries with no name on
+load (id-only or name-only entries hit the one-time alphabetical sort and crashed
+the whole PINNED pane); same-shape entries are now refused at load, matching what
+`importLayout` already refused. Shipped-code delta is the two-line `normalize()`
+filter in `full/plugin.js` + `desktop/plugin.js`; everything else is test gain
+(+20 asserts per build — suite 94 → 114 ok catalog, 97 → 117 ok full:
+`orderRows`/`applyView` edges, click-gesture and `chatMenuItems` deltas, the
+nameless-load regression).
+
+### Fixed
+- Load no longer crashes the pane on a nameless/half-written folder entry (#39, @jacobhausler)
+
+### Maintenance
+- Cover `orderRows`/`applyView` edges: unranked sink, `started_at` fallback, filter composition (#38, @jacobhausler)
+- Click-gesture + `chatMenuItems` coverage delta batch: ctrl gesture, per-path return/consume flags, Move-to indent/disabled, Unsorted pair, guidance label, Delete destructive, Open-in-new-tab (#36, @jacobhausler)
+
 ## [0.1.4] - 2026-10-06
 
 Docs + CI-floor release: the shipped plugin is byte-identical to `v0.1.3`
