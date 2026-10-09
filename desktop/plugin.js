@@ -497,7 +497,7 @@ const emit = ev => bus.forEach(fn => { try { fn(ev) } catch {} })
 const treeKey = connectionId => 'tree.' + (connectionId || 'local')
 const loadTree = key => normalize(store.get(key, null))
 
-function mutateTree(key, fn) {
+export function mutateTree(key, fn) {
   const prev = loadTree(key)
   const next = fn(prev)
   if (next === prev) return

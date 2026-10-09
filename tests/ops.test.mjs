@@ -7,7 +7,10 @@ const FULL = process.argv[2] === 'full'
 const target = new URL(FULL ? '../full/plugin.js' : '../desktop/plugin.js', import.meta.url)
 const src = readFileSync(target, 'utf8')
 const sdkNames = [...src.matchAll(/import\s*\{([^}]*)\}\s*from\s*'([^']+)'/g)].flatMap(m => m[1].split(',').map(x => x.trim()).filter(Boolean))
-const stub = 'export const ' + [...new Set(sdkNames)].map(n => n + '=()=>null').join(',') + '; export default {}'
+// `host` is the one SDK import used as an object, not a component: register()
+// (full build) reads host.state.focusedStoredSessionId's get/listen at call time.
+globalThis.__pfHost = { state: { focusedStoredSessionId: { get: () => 'f1', listen: () => () => {} } } }
+const stub = 'export const ' + [...new Set(sdkNames)].map(n => (n === 'host' ? 'host=globalThis.__pfHost' : n + '=()=>null')).join(',') + '; export default {}'
 register('data:text/javascript,' + encodeURIComponent(`
 export async function resolve(s, c, n) {
   if (s === '@hermes/plugin-sdk' || s === 'react' || s === 'react/jsx-runtime') return { url: 'stub:' + s, shortCircuit: true }
@@ -488,4 +491,57 @@ if (!FULL) {
   const asks = ['hermes version', 'plugin version', 'steps to reproduce', 'expected', 'actual'].filter(k => !bug.toLowerCase().includes(k))
   assert(/^name:\s*\S/m.test(front) && /^about:\s*\S/m.test(front) && !/^labels:/m.test(front) && !asks.length,
     'bug template: name/about front matter, no auto-label (triage stays with the maintainer), asks ' + (asks.length ? 'MISSING ' + asks.join(', ') : 'Hermes version, plugin version, steps, expected vs actual'))
+}
+
+// register() writes through one door: store = ctx.storage, so mutateTree and
+// markJudged are only testable once the plugin is registered. Stub the globals
+// register() reaches (DOM for the hide-core observer, host for focus tracking)
+// and hand it a Map-backed storage, then exercise the write paths behaviourally.
+const { mutateTree, markJudged } = mod
+if (FULL) {
+  globalThis.document = { hidden: false, body: {}, querySelectorAll: () => [] }
+  globalThis.MutationObserver = class { observe() {} disconnect() {} }
+  globalThis.requestAnimationFrame = fn => (fn(), 1)
+  globalThis.cancelAnimationFrame = () => {}
+  globalThis.window = { localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} } }
+
+  const mem = new Map([['autoJudged', []]])
+  const writes = []
+  const registered = []
+  const disposed = []
+  const CONN = 'conn-9'
+  plugin.register({
+    storage: {
+      get: (k, d) => (mem.has(k) ? mem.get(k) : d),
+      set: (k, v) => { writes.push(k); mem.set(k, v) },
+      remove: k => { mem.delete(k) }
+    },
+    os: { writeText: () => {} },
+    register: entry => registered.push(entry),
+    onDispose: fn => { disposed.push(fn); return () => {} }
+  })
+  assert(registered.map(e => e.id).join() === 'auto-pin,pane', 'register() registers the composer middleware and the pane')
+
+  // mutateTree: a new tree writes exactly once, at the connection-scoped key.
+  const tk = 'tree.' + CONN
+  const before = writes.length
+  const written = mutateTree(tk, t => ({ ...t, order: [...t.order, 's1'] }))
+  assert(writes.length === before + 1 && writes[before] === tk, 'mutateTree writes the tree once, at tree.<connectionId>')
+
+  // mutateTree: a handler that returns the tree it was given is a no-op write.
+  const same = before + 1
+  mutateTree(tk, t => t)
+  assert(writes.length === same, 'mutateTree skips the write when the mutation returns the same tree')
+
+  // markJudged: appends, dropping blanks and ids already judged.
+  mem.set('autoJudged', ['seed'])
+  markJudged(['x', 'x', null, 'y', 'seed'])
+  assert(mem.get('autoJudged').join() === 'seed,x,y', 'markJudged appends de-duplicated ids after the ones already judged')
+
+  // markJudged: the ledger keeps the most recent 1000 ids, oldest evicted first.
+  mem.set('autoJudged', Array.from({ length: 999 }, (_, i) => 'j' + i))
+  markJudged(Array.from({ length: 20 }, (_, i) => 'k' + i))
+  const ledger = mem.get('autoJudged')
+  assert(ledger.length === 1000 && ledger[0] === 'j19' && ledger[999] === 'k19',
+    'markJudged caps the judged ledger at the newest 1000 ids, evicting the oldest')
 }
