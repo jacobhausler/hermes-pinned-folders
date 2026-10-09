@@ -18,7 +18,7 @@ export async function load(u, c, n) {
   return n(u, c)
 }`))
 const mod = await import(target.href)
-const { ops, normalize, folderActivity, filterView, exportLayout, importLayout, default: plugin } = mod
+const { ops, normalize, folderActivity, filterView, ancestorsOf, isDescendant, folderOf, exportLayout, importLayout, default: plugin } = mod
 const assert = (c, m) => { if (!c) { console.error('FAIL', m); process.exit(1) } else console.log('ok', m) }
 console.log('# build:', FULL ? 'full' : 'catalog')
 let t = { folders: [], placed: {}, order: [], collapsed: {} }
@@ -36,6 +36,26 @@ t = ops.deleteFolder(t, 'a')
 assert(Object.keys(t.placed).length === 0, 'deleting top folder returns chats to Unsorted')
 assert(ops.rename(ops.addFolder(t,null,'x','z'),'z','  ').folders[0].name === 'x', 'blank rename ignored')
 assert(plugin.id === 'pinned-folders' && typeof plugin.register === 'function', 'plugin shape')
+
+// Tree helpers: ancestorsOf / isDescendant / folderOf edge cases.
+{
+  let th = { folders: [], placed: {}, order: [], collapsed: {} }
+  th = ops.addFolder(th, null, 'a', 'a'); th = ops.addFolder(th, 'a', 'b', 'b'); th = ops.addFolder(th, 'b', 'c', 'c')
+  const byId = new Map(th.folders.map(f => [f.id, f]))
+  assert(ancestorsOf(byId, 'c').map(f => f.id).join() === 'c,b,a', 'ancestorsOf 3-deep chain, nearest first')
+  const orphan = new Map([['orphan', { id: 'orphan', parent: 'ghost' }]])
+  assert(ancestorsOf(orphan, 'orphan').map(f => f.id).join() === 'orphan', 'ancestorsOf orphan (absent parent id) returns just [self]')
+  assert(ancestorsOf(byId, 'nope').length === 0, 'ancestorsOf unknown fid returns []')
+  assert(isDescendant(th, 'c', 'a') === true, 'isDescendant grandchild -> ancestor is true')
+  assert(isDescendant(th, 'a', 'c') === false, 'isDescendant ancestor -> descendant is false')
+  const cyc = { folders: [{ id: 'a', name: 'a', parent: 'c' }, { id: 'c', name: 'c', parent: 'a' }], placed: {}, order: [], collapsed: {} }
+  assert(isDescendant(cyc, 'a', 'zz') === false, 'isDescendant terminates on forged parent cycle a->c->a (hop cap), returns false')
+  const tp = ops.placeSession(ops.placeSession(th, 's1', 'b'), 's2', 'ghost-folder')
+  const ids = new Set(tp.folders.map(f => f.id))
+  assert(folderOf(tp, ids, 's1') === 'b', 'folderOf returns the placed folder id')
+  assert(folderOf(tp, ids, 'nosid') === null, 'folderOf unplaced sid falls back to ROOT (null)')
+  assert(folderOf(tp, ids, 's2') === null, 'folderOf sid placed in a deleted folder falls back to ROOT (null)')
+}
 
 let u = ops.placeSession(ops.addFolder({ folders: [], placed: {}, order: [], collapsed: {} }, null, 'W', 'w'), 'x', 'w')
 u = ops.forgetSession(u, 'x')

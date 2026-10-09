@@ -92,7 +92,7 @@ export function normalize(v) {
 
 const newId = () => 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
 
-function isDescendant(t, id, ancestor) {
+export function isDescendant(t, id, ancestor) {
   const byId = new Map(t.folders.map(f => [f.id, f]))
   for (let cur = byId.get(id), hops = 0; cur && hops < 1000; cur = byId.get(cur.parent), hops++) {
     if (cur.id === ancestor) return true
@@ -207,7 +207,7 @@ export const ops = {
 // ── derived views (pure, exported for tests) ─────────────────────────────────
 
 // Ancestor chain of a folder, nearest first.
-function ancestorsOf(byId, fid) {
+export function ancestorsOf(byId, fid) {
   const out = []
   for (let cur = byId.get(fid), hops = 0; cur && hops < 1000; cur = byId.get(cur.parent), hops++) out.push(cur)
   return out
@@ -442,7 +442,7 @@ export function importLayout(text) {
 }
 
 // Folder id for a chat, falling back to Unsorted when its folder was deleted.
-function folderOf(t, ids, sid) {
+export function folderOf(t, ids, sid) {
   const fid = t.placed[sid]
   return fid && ids.has(fid) ? fid : ROOT
 }
