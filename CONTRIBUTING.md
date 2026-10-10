@@ -35,6 +35,11 @@ node tests/ops.test.mjs full    # full build → all ok, exit 0
 hermes plugins validate .       # → Validation passed.
 ```
 
+Every PR body fills the `.github/PULL_REQUEST_TEMPLATE.md` sections: a `pr-diagram`
+line (archify PNG + `docs/pr-diagrams/<bead>.json` for non-trivial changes, or
+`pr-diagram: exempt — <what> <why>` for trivial ones) and a `Gates` block pasting the
+last line of each command above. CI's `pr-compliance` gate checks both.
+
 Every line must pass on your branch. If a test fails, run it on a clean `main` too
 — a failure that also fails on `main` is a baseline flake (say so in the PR), a
 failure only on your branch is yours.
