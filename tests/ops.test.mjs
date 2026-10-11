@@ -403,6 +403,28 @@ const loaded = normalize(JSON.parse(JSON.stringify(legacy)))
 assert(JSON.stringify(loaded.view) === JSON.stringify(DEFAULT_VIEW), 'old layout without view state loads with default view')
 assert(JSON.stringify({ ...loaded, view: undefined }) === JSON.stringify({ ...legacy, view: undefined }), 'old layout keeps folders, colors, placement, order, collapse unchanged')
 assert(JSON.stringify(normalizeView({ order: 'sideways', status: 42, unreadOnly: 'yes' })) === JSON.stringify(DEFAULT_VIEW), 'garbage view values fall back to defaults')
+// ── normalizeView edges: the persisted-view migration boundary. This function
+// rewrites user view state on every load, so "never break user state" applies to
+// it field-by-field: valid survives untouched, invalid repairs alone, truthy
+// non-true never counts as a filter.
+{
+  const nvFull = { order: 'recent', unreadOnly: true, status: 'working', profile: 'current' }
+  assert(JSON.stringify(normalizeView(nvFull)) === JSON.stringify(nvFull), 'a fully-valid view passes through byte-identical (no silent coercion of user state)')
+  const nvHalf = normalizeView({ order: 'recent', status: 'nope', profile: 'current' })
+  assert(nvHalf.order === 'recent' && nvHalf.profile === 'current' && nvHalf.status === 'all' && nvHalf.unreadOnly === false,
+    'mixed valid/invalid keeps every valid field, repairs only the bad ones')
+  for (const truthy of ['yes', 1, {}, []])
+    assert(normalizeView({ unreadOnly: truthy }).unreadOnly === false, 'unreadOnly honors only true: ' + JSON.stringify(truthy) + ' is not a filter')
+  for (const junk of [null, undefined, 'recent', 42, []])
+    assert(JSON.stringify(normalizeView(junk)) === JSON.stringify(DEFAULT_VIEW), 'non-object view input falls back to defaults (' + String(junk) + ')')
+  // Drift guard on the menu vocabulary seen through the normalizer: if a choice
+  // is renamed or dropped, its round-trip fails here before the menu mis-repairs.
+  for (const patch of [{ order: 'recent' }, { status: 'unread' }, { status: 'working' }, { profile: 'current' }])
+    assert(JSON.stringify(normalizeView({ ...DEFAULT_VIEW, ...patch })) === JSON.stringify({ ...DEFAULT_VIEW, ...patch }), 'menu choice round-trips: ' + JSON.stringify(patch))
+  assert(Object.isFrozen(DEFAULT_VIEW), 'DEFAULT_VIEW is frozen (a stray mutation would corrupt every default)')
+  const nvWrap = normalize({ folders: [], foldersOrdered: true, view: { order: 'recent', status: 'nope' } })
+  assert(nvWrap.view.order === 'recent' && nvWrap.view.status === 'all', 'normalize repairs a half-valid view field-by-field, not by wiping it')
+}
 // viewFilters / viewIsDefault: the menu's enable lines. Order is not a filter,
 // so the two predicates differ exactly on `order` — pin the seam.
 const { viewFilters, viewIsDefault } = mod
