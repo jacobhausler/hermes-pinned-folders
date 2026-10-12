@@ -22,8 +22,8 @@ Node 22 or newer. Nothing to install.
 ```sh
 node scripts/build.mjs          # → built desktop/plugin.js
 node tests/build.test.mjs    # strip() parser → 10 "ok" lines, exit 0
-node tests/ops.test.mjs         # catalog build → 94 "ok" lines, exit 0
-node tests/ops.test.mjs full    # full build   → 97 "ok" lines, exit 0
+node tests/ops.test.mjs         # catalog build → 140 "ok" lines, exit 0
+node tests/ops.test.mjs full    # full build   → 155 "ok" lines, exit 0
 node scripts/sdk-contract.mjs /tmp/hermes-agent  # → "sdk-contract: OK (28 imports resolved at the pin)", exit 0; needs a hermes-agent checkout at the HERMES_PIN commit (see .github/workflows/ci.yml)
 hermes plugins validate .       # → "Validation passed." (catalog admission; not an SDK-only proof)
 ```
@@ -75,5 +75,5 @@ Screenshots use demo chats only: a throwaway `HERMES_HOME` outside `~/.hermes`, 
 
 ## Releasing
 
-1. On a `release/vX.Y.Z` branch, bump `version` in `plugin.yaml` and add the `CHANGELOG.md` section (merged PRs since the last tag, with `#n` and author). Rebuild, test, validate, then open a PR labelled `release`. The owner tags `vX.Y.Z` on the merge commit.
+1. On a `release/vX.Y.Z` branch, bump `version` in `plugin.yaml` and add the `CHANGELOG.md` section (merged PRs since the last tag, with `#n` and author). Rebuild, test, validate, then open a PR labelled `release`. The release lane is bot-owned (owner ruling 2026-09-28): the maintainer bot merges the green release PR and tags `vX.Y.Z` on the merge commit — no human gate.
 2. The catalog entry (`plugin-catalog/pinned-folders.yaml` in NousResearch/hermes-agent) pins a full 40-character commit SHA. A release is a PR there that moves the SHA and version.
