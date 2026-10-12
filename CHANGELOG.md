@@ -3,6 +3,20 @@
 All notable changes to this plugin. Versions follow `plugin.yaml`; each release is a
 `vX.Y.Z` tag and a catalog entry pinned to that tag's commit.
 
+## [0.1.6] - 2026-10-12
+
+CI-floor + tests release: the shipped plugin is byte-identical to `v0.1.5`
+(`git diff v0.1.5..HEAD -- full/ desktop/ scripts/` is empty apart from this
+release's `version` literal; `desktop/plugin.js` and `full/plugin.js` are
+unchanged). No behavior change.
+
+### Maintenance
+- pr-compliance `diagram-check` gate + pr-diagram PR template (standard v0.2, pushed directly to main; mirrors the peer estate's gate) (0af26c1, ce67c36, @jacobhausler)
+- CONTRIBUTING names the pr-compliance body sections (#44, @jacobhausler)
+- Drop stale lowercase `pull_request_template.md` (est-ugims) (#45, @jacobhausler)
+- `normalizeView` edge tests: field-by-field repair contract on the persisted-view boundary (#46, @jacobhausler)
+- pr-compliance v0.3 C8 composition-law mirror (#47, @jacobhausler)
+
 ## [0.1.5] - 2026-10-09
 
 Bugfix + tests release: `normalize()` now drops folder entries with no name on
@@ -93,6 +107,8 @@ which uses only the SDK.
 - repo-admin standard: path-scoped CI `gates` check, CONTRIBUTING with the review
   checklist, PR template (#2, @jacobhausler)
 
+[0.1.6]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.6
+[0.1.5]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.5
 [0.1.4]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.4
 [0.1.3]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.3
 [0.1.2]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.2
