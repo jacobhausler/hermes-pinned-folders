@@ -2,7 +2,10 @@
 // and `node tests/ops.test.mjs full` (full/plugin.js). The SDK and React are
 // stubbed with exactly the names the file imports, read from its own source.
 import { register } from 'node:module'
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 const FULL = process.argv[2] === 'full'
 const target = new URL(FULL ? '../full/plugin.js' : '../desktop/plugin.js', import.meta.url)
 const src = readFileSync(target, 'utf8')
@@ -566,4 +569,29 @@ if (FULL) {
   const ledger = mem.get('autoJudged')
   assert(ledger.length === 1000 && ledger[0] === 'j19' && ledger[999] === 'k19',
     'markJudged caps the judged ledger at the newest 1000 ids, evicting the oldest')
+}
+
+// --- sdk-contract.mjs prints the checkout's ACTUAL short HEAD, never a
+// hardcoded literal: a drift probe at upstream main must not read like a pin
+// check (nightly 2026-10-13). Fake checkout = one index.ts whose plain star
+// re-export resolves every imported name.
+{
+  const dir = mkdtempSync(join(tmpdir(), 'pf-sdkgate-'))
+  const failFixture = (what) => { console.error('FAIL sdk-contract fixture: ' + what); process.exit(1) }
+  mkdirSync(join(dir, 'apps/desktop/src/sdk'), { recursive: true })
+  writeFileSync(join(dir, 'apps/desktop/src/sdk/index.ts'), "export * from './real'\n")
+  const run = () => spawnSync('node', [new URL('../scripts/sdk-contract.mjs', import.meta.url).pathname, dir], { encoding: 'utf8' })
+  const git = (...a) => spawnSync('git', ['-C', dir, ...a], { encoding: 'utf8', env: { ...process.env, HOME: dir, GIT_CONFIG_NOSYSTEM: '1' } })
+  const rNoGit = run()
+  assert(rNoGit.status === 0 && /resolved at unknown/.test(rNoGit.stdout),
+    'sdk-contract: a non-git checkout honestly reports at unknown, exit 0 unchanged')
+  if (git('init', '-q').status !== 0) failFixture('init')
+  if (git('add', '-A').status !== 0) failFixture('add')
+  if (git('-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'fixture').status !== 0) failFixture('commit')
+  const head = git('rev-parse', '--short', 'HEAD').stdout.trim()
+  const rGit = run()
+  assert(rGit.status === 0, 'sdk-contract: exit 0 when the checkout star-re-exports every imported name')
+  assert(rGit.stdout.includes('resolved at ' + head),
+    'sdk-contract OK line carries the checkout short HEAD (' + head + '), not a fixed label')
+  rmSync(dir, { recursive: true, force: true })
 }

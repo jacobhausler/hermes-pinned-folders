@@ -1,18 +1,24 @@
 // SDK contract gate: every name desktop/plugin.js imports from
 // @hermes/plugin-sdk must actually exist in the pinned hermes-agent checkout.
 // The catalog build's stub-based tests cannot see an upstream removal — this
-// gate reads the real apps/desktop/src/sdk/index.ts at the pin.
+// gate reads the real apps/desktop/src/sdk/index.ts in the checkout it is given.
 //
 // Usage: node scripts/sdk-contract.mjs <path-to-hermes-agent-checkout>
 // Exit 0: every import resolved. Exit 1: `MISSING: <names>` printed.
+// The OK line prints the checkout's ACTUAL short HEAD (or `unknown` when the
+// checkout isn't a git tree) — a drift probe at upstream main must not read
+// like a pin check (nightly 2026-10-13: the hardcoded literal mislead).
 import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { spawnSync } from 'node:child_process'
 
 const root = process.argv[2]
 if (!root) { console.error('usage: node scripts/sdk-contract.mjs <path-to-hermes-agent-checkout>'); process.exit(1) }
 const indexTs = join(root, 'apps/desktop/src/sdk/index.ts')
 if (!existsSync(indexTs)) { console.error('not a hermes-agent checkout (missing ' + indexTs + ')'); process.exit(1) }
 const SRC_DIR = join(root, 'apps/desktop/src')
+const git = spawnSync('git', ['-C', root, 'rev-parse', '--short', 'HEAD'], { encoding: 'utf8' })
+const at = git.status === 0 ? git.stdout.trim() : 'unknown'
 
 // ONE extractor shape, same regex family as tests/ops.test.mjs (the import gate
 // precedent): capture the braces block AND the module specifier so we can keep
@@ -76,4 +82,4 @@ const missing = names.filter(n => {
 })
 for (const n of names) if (!missing.includes(n)) console.log('ok', n)
 if (missing.length) { console.log('MISSING: ' + missing.join(', ')); process.exit(1) }
-console.log(`sdk-contract: OK (${names.length} imports resolved at the pin)`)
+console.log(`sdk-contract: OK (${names.length} imports resolved at ${at})`)
