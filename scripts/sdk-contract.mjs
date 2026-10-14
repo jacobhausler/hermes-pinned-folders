@@ -7,7 +7,7 @@
 // Exit 0: every import resolved. Exit 1: `MISSING: <names>` printed.
 // The OK line prints the checkout's ACTUAL short HEAD (or `unknown` when the
 // checkout isn't a git tree) — a drift probe at upstream main must not read
-// like a pin check (nightly 2026-10-13: the hardcoded literal mislead).
+// like a pin check (a fixed label once misled exactly that way).
 import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'

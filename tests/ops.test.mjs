@@ -6,6 +6,7 @@ import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'nod
 import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 const FULL = process.argv[2] === 'full'
 const target = new URL(FULL ? '../full/plugin.js' : '../desktop/plugin.js', import.meta.url)
 const src = readFileSync(target, 'utf8')
@@ -573,14 +574,18 @@ if (FULL) {
 
 // --- sdk-contract.mjs prints the checkout's ACTUAL short HEAD, never a
 // hardcoded literal: a drift probe at upstream main must not read like a pin
-// check (nightly 2026-10-13). Fake checkout = one index.ts whose plain star
+// check. Fake checkout = one index.ts whose plain star
 // re-export resolves every imported name.
 {
   const dir = mkdtempSync(join(tmpdir(), 'pf-sdkgate-'))
   const failFixture = (what) => { console.error('FAIL sdk-contract fixture: ' + what); process.exit(1) }
   mkdirSync(join(dir, 'apps/desktop/src/sdk'), { recursive: true })
   writeFileSync(join(dir, 'apps/desktop/src/sdk/index.ts'), "export * from './real'\n")
-  const run = () => spawnSync('node', [new URL('../scripts/sdk-contract.mjs', import.meta.url).pathname, dir], { encoding: 'utf8' })
+  // GIT_CEILING_DIRECTORIES: the no-git assertion walks up looking for an
+  // enclosing work tree; the ceiling makes the fixture inert anywhere tmp
+  // sits inside a repo, not just on CI's /tmp.
+  const run = () => spawnSync('node', [fileURLToPath(new URL('../scripts/sdk-contract.mjs', import.meta.url)), dir],
+    { encoding: 'utf8', env: { ...process.env, GIT_CEILING_DIRECTORIES: tmpdir() } })
   const git = (...a) => spawnSync('git', ['-C', dir, ...a], { encoding: 'utf8', env: { ...process.env, HOME: dir, GIT_CONFIG_NOSYSTEM: '1' } })
   const rNoGit = run()
   assert(rNoGit.status === 0 && /resolved at unknown/.test(rNoGit.stdout),
