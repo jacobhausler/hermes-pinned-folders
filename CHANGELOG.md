@@ -3,6 +3,22 @@
 All notable changes to this plugin. Versions follow `plugin.yaml`; each release is a
 `vX.Y.Z` tag and a catalog entry pinned to that tag's commit.
 
+## [0.1.7] - 2026-10-15
+
+Tests + gate-hygiene release: the shipped plugin is byte-identical to `v0.1.6`
+(`git diff v0.1.6..HEAD -- full/ desktop/` is empty apart from this release's
+`version` literal; `desktop/plugin.js` and `full/plugin.js` are unchanged).
+No behavior change. The delta is test gain (+9 asserts per build — suite
+140 → 149 ok catalog, 155 → 164 ok full: `importLayout` hand-edited-export
+edges, `sdk-contract` HEAD-honesty and ceiling-guard coverage) plus a gate
+script that now says which checkout it actually looked at.
+
+### Maintenance
+- `AGENTS.md`: bot-owned release flow (the maintainer bot merges the green release PR and tags it — no human gate) + re-measured gate counts (f319a62, #48, @jacobhausler)
+- `sdk-contract`: print the checkout's real short HEAD, not a fixed label — a drift probe must not read like a pin check (31d968d, #50, @jacobhausler)
+- Peer-nit discharge for #50: ceiling guard + `fileURLToPath`, dated clauses dropped from the test (758b65a, #51, @jacobhausler)
+- `importLayout` hand-edited-export edges: junk folder entries, non-string placement values, order filtering, missing-order default, non-string color drop, `foldersOrdered` stamp (06ef18b, #53, @jacobhausler)
+
 ## [0.1.6] - 2026-10-12
 
 CI-floor + tests release: the shipped plugin is byte-identical to `v0.1.5`
@@ -107,6 +123,7 @@ which uses only the SDK.
 - repo-admin standard: path-scoped CI `gates` check, CONTRIBUTING with the review
   checklist, PR template (#2, @jacobhausler)
 
+[0.1.7]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.7
 [0.1.6]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.6
 [0.1.5]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.5
 [0.1.4]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.4
