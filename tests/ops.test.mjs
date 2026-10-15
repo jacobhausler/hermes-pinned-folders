@@ -324,6 +324,15 @@ const cyc = importLayout(JSON.stringify({ format: 'pinned-folders/layout@1', fol
 assert(cyc.folders.some(f => f.parent === null && (f.id === 'p' || f.id === 'q')), 'import breaks a parent cycle')
 assert(cyc.folders.find(f => f.id === 'o').parent === null, 'import lifts orphan folder to top level')
 assert(!('s' in cyc.placed) && cyc.placed.t === 'p', 'import drops placement into missing folders')
+// hand-edited export files exercise the defensive branches the round-trip never hits
+const junk = importLayout(JSON.stringify({ format: 'pinned-folders/layout@1', folders: [{ id: 'p', name: 'P' }, { id: 'x', name: 7 }, { id: 'y' }, 42], placed: { s: 7, t: null, u: 'p' }, order: ['b', 3, null, 'a'] }))
+assert(junk.folders.length === 1 && junk.folders[0].id === 'p', 'import drops folder entries missing a string id or name')
+assert(Object.keys(junk.placed).join() === 'u', 'import keeps only string placements pointing at real folders')
+assert(junk.order.join() === 'b,a', 'import keeps only string ids in order')
+assert(importLayout(JSON.stringify({ format: 'pinned-folders/layout@1', folders: [] })).order.length === 0, 'import defaults a missing order to empty')
+const colr = importLayout(JSON.stringify({ format: 'pinned-folders/layout@1', folders: [{ id: 'p', name: 'P', color: 3.14 }], placed: {}, order: [] }))
+assert(!('color' in colr.folders[0]), 'import drops a non-string color instead of writing junk into state')
+assert(colr.foldersOrdered === true, 'import marks imported folders as manually ordered')
 
 // ── row gestures: core's ⇧-click language, pinned-pane subset (#12) ──
 const { handlePinnedRowClick, pinnedRowClick, chatMenuItems } = mod
