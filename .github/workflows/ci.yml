@@ -64,7 +64,7 @@ jobs:
       - uses: actions/setup-python@v5
         if: steps.cls.outputs.docs_only == 'false'
         with:
-          python-version: "3.12"
+          python-version: "3.14"
 
       # The floor contract, installed FIRST: tests that import real core (hermes_constants,
       # the quiet-turn-report file, /opt/hermes shims) run against the pinned release, not
