@@ -333,6 +333,17 @@ assert(importLayout(JSON.stringify({ format: 'pinned-folders/layout@1', folders:
 const colr = importLayout(JSON.stringify({ format: 'pinned-folders/layout@1', folders: [{ id: 'p', name: 'P', color: 3.14 }], placed: {}, order: [] }))
 assert(!('color' in colr.folders[0]), 'import drops a non-string color instead of writing junk into state')
 assert(colr.foldersOrdered === true, 'import marks imported folders as manually ordered')
+// exportLayout's side of the contract: tagged envelope, hand-editable pretty
+// print, and exactly the portable keys — UI-only state never leaves the device.
+const EX = ops.toggle(ops.placeSession(E, 'z', 'ts'), 'ts') // place a chat, collapse its folder
+const env = JSON.parse(exportLayout(EX))
+assert(Object.keys(env).join() === 'format,folders,placed,order', 'export carries exactly the four portable keys')
+assert(!('collapsed' in env), 'export never leaks collapsed (UI-only) state')
+assert(env.format === 'pinned-folders/layout@1', 'export carries the layout tag')
+assert(exportLayout(EX).includes('\n  '), 'export is pretty-printed so hand edits survive import')
+const rz = importLayout(exportLayout(EX))
+assert(rz.order.join() === EX.order.join(), 'round-trip preserves manual order')
+assert(Object.keys(rz.collapsed).length === 0, 'import resets collapsed instead of trusting the file')
 
 // ── row gestures: core's ⇧-click language, pinned-pane subset (#12) ──
 const { handlePinnedRowClick, pinnedRowClick, chatMenuItems } = mod
