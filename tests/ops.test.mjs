@@ -299,6 +299,32 @@ assert(act.get('mid')?.unread === 1 && !act.get('mid').active, 'unread chat mark
 assert(act.get('top')?.unread === 1 && act.get('top').active === true, 'parent rolls up child unread + own active')
 assert(!act.has('q'), 'quiet folder has no badge')
 
+// ── activity edge cases ──
+// Placement pointing at a folder that no longer exists contributes nothing.
+const dang = folderActivity({ folders: [{ id: 'a', parent: null }], placed: { s: 'gone' } }, [{ id: 's', unread: true, is_active: true }])
+assert(dang.size === 0, 'activity: placement into a missing folder is ignored')
+assert(folderActivity(A, null).size === 0, 'activity: null rows give an empty map')
+assert(folderActivity(A, undefined).size === 0, 'activity: undefined rows give an empty map')
+// Siblings sum into their shared parent, and the sum reaches every ancestor.
+let S = normalize(null)
+S = ops.addFolder(S, null, 'Root', 'r'); S = ops.addFolder(S, 'r', 'Top', 'top')
+S = ops.addFolder(S, 'top', 'K1', 'k1'); S = ops.addFolder(S, 'top', 'K2', 'k2')
+S = ops.placeSession(S, 's1', 'k1'); S = ops.placeSession(S, 's2', 'k1'); S = ops.placeSession(S, 's3', 'k2')
+const sib = folderActivity(S, [{ id: 's1', unread: true }, { id: 's2', unread: true }, { id: 's3', unread: true }])
+assert(sib.get('k1')?.unread === 2, 'activity: two unread chats in one folder count 2')
+assert(sib.get('k2')?.unread === 1, 'activity: sibling folder counts only its own chat')
+assert(sib.get('top')?.unread === 3, 'activity: parent sums both sibling folders')
+assert(sib.get('r')?.unread === 3, 'activity: sum reaches the root, not just the parent')
+// Active with no unread: badge is active with a zero count, all the way up.
+const onlyAct = folderActivity(S, [{ id: 's3', is_active: true }])
+assert(['k2', 'top', 'r'].every(f => onlyAct.get(f)?.unread === 0 && onlyAct.get(f).active === true), 'activity: active-only chat marks folder and every ancestor active with 0 unread')
+assert(!onlyAct.has('k1'), 'activity: active-only chat leaves the sibling folder unbadged')
+// A parent cycle (ops refuse it, so build it by hand) must not hang. The exact
+// unread count on a cycle is a known over-count (est-vssmr) and is not pinned here.
+const faCyc = folderActivity({ folders: [{ id: 'a', parent: 'c' }, { id: 'c', parent: 'a' }], placed: { s: 'a' } }, [{ id: 's', unread: true }])
+assert(faCyc.has('a') && faCyc.has('c'), 'activity: parent cycle returns and badges both folders')
+assert(faCyc.get('a').active === false && faCyc.get('c').active === false, 'activity: parent cycle with no active chat stays inactive')
+
 // ── filter ──
 let F = normalize(null)
 F = ops.addFolder(F, null, 'Infra', 'inf'); F = ops.addFolder(F, 'inf', 'Tailscale', 'ts'); F = ops.addFolder(F, null, 'Personal', 'per')
