@@ -206,10 +206,18 @@ export const ops = {
 
 // ── derived views (pure, exported for tests) ─────────────────────────────────
 
-// Ancestor chain of a folder, nearest first.
+// Ancestor chain of a folder, nearest first. Stops at the first revisit: a
+// forged parent cycle (normalize breaks them on load; ops refuse them) would
+// otherwise revisit until the hop cap and multiply folderActivity counts
+// (est-vssmr). The hop cap stays as a second guard for pathological chains.
 export function ancestorsOf(byId, fid) {
   const out = []
-  for (let cur = byId.get(fid), hops = 0; cur && hops < 1000; cur = byId.get(cur.parent), hops++) out.push(cur)
+  const seen = new Set()
+  for (let cur = byId.get(fid), hops = 0; cur && hops < 1000; cur = byId.get(cur.parent), hops++) {
+    if (seen.has(cur.id)) break
+    seen.add(cur.id)
+    out.push(cur)
+  }
   return out
 }
 

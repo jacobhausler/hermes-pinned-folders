@@ -319,11 +319,13 @@ assert(sib.get('r')?.unread === 3, 'activity: sum reaches the root, not just the
 const onlyAct = folderActivity(S, [{ id: 's3', is_active: true }])
 assert(['k2', 'top', 'r'].every(f => onlyAct.get(f)?.unread === 0 && onlyAct.get(f).active === true), 'activity: active-only chat marks folder and every ancestor active with 0 unread')
 assert(!onlyAct.has('k1'), 'activity: active-only chat leaves the sibling folder unbadged')
-// A parent cycle (ops refuse it, so build it by hand) must not hang. The exact
-// unread count on a cycle is a known over-count (est-vssmr) and is not pinned here.
+// A parent cycle (ops refuse it, so build it by hand) must not hang and must
+// not multiply: ancestorsOf stops at the first revisit, so each folder on the
+// cycle counts the unread chat exactly once (est-vssmr).
 const faCyc = folderActivity({ folders: [{ id: 'a', parent: 'c' }, { id: 'c', parent: 'a' }], placed: { s: 'a' } }, [{ id: 's', unread: true }])
 assert(faCyc.has('a') && faCyc.has('c'), 'activity: parent cycle returns and badges both folders')
 assert(faCyc.get('a').active === false && faCyc.get('c').active === false, 'activity: parent cycle with no active chat stays inactive')
+assert(faCyc.get('a').unread === 1 && faCyc.get('c').unread === 1, 'activity: parent cycle counts the unread chat exactly once per folder (est-vssmr)')
 
 // ── filter ──
 let F = normalize(null)
