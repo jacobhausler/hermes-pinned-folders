@@ -3,6 +3,25 @@
 All notable changes to this plugin. Versions follow `plugin.yaml`; each release is a
 `vX.Y.Z` tag and a catalog entry pinned to that tag's commit.
 
+## [0.1.8] - 2026-10-19
+
+Fix + hardening release: the shipped bundle changed — `ancestorsOf` now stops at
+first revisit, so `folderActivity` no longer over-counts on cyclic folder graphs
+(#58). The rest is test teeth, a CI floor repin and doc counts; no other behavior
+change. Gates at this release: suite 167 ok catalog / 182 ok full, 0 failures,
+`hermes plugins validate` clean, bundle rebuild byte-identical.
+
+### Fixed
+- `views`: `ancestorsOf` stops at first revisit — `folderActivity` cycle over-count fixed (39e64f8, #58, @jacobhausler)
+
+### Tests
+- pin the `exportLayout` envelope (f95b1a8, #55, @jacobhausler)
+- pin `folderActivity` edges — dangling placement, parent cycle, null rows, sibling sums, active-only (45eb754, #57, @jacobhausler)
+
+### Maintenance
+- CI repin `HERMES_PIN` v2026.9.24 → v0.21.7 (+ Python 3.14) (7a72ebb, #56, @jacobhausler)
+- `AGENTS.md`: refresh drifted ok-counts in Commands block to measured 167/182 (1500385, #59, @jacobhausler)
+
 ## [0.1.7] - 2026-10-15
 
 Tests + gate-hygiene release: the shipped plugin is byte-identical to `v0.1.6`
@@ -123,6 +142,7 @@ which uses only the SDK.
 - repo-admin standard: path-scoped CI `gates` check, CONTRIBUTING with the review
   checklist, PR template (#2, @jacobhausler)
 
+[0.1.8]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.8
 [0.1.7]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.7
 [0.1.6]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.6
 [0.1.5]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.5
