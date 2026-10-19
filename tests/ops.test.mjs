@@ -549,6 +549,33 @@ assert(chatsBeneath('w', gIn, gKids, gUnread).map(r => r.id).join() === 'u1,u2',
 const gText = narrowView(G, gr, 'old', G.view, 'default')
 assert(chatsBeneath('w', gIn, gKids, gText).map(r => r.id).join() === 'r2', 'open all as tabs under the text filter opens only the visible rows')
 assert(visibleRows(gIn.get('w'), gUnread).map(r => r.id).join() === 'u1', 'the render selector and open all share visibleRows')
+// visibleRows edges (IDLE-DRIVE sweep): passthrough (default view and explicit
+// null), null-list tolerance, empty and ghost views, the status/profile gates,
+// and that the order comes from the INPUT list, not the chats-set insertion
+// order. One local row array carries the is_active/profile fields the gates read.
+const gWk = [
+  { id: 'r1', title: 'read' },
+  { id: 'u1', title: 'new', unread: true },
+  { id: 'u2', title: 'news', unread: true, is_active: true },
+  { id: 'r2', title: 'old', is_active: true, profile: 'here' },
+]
+const gDef = narrowView(G, gr, '', G.view, 'default')
+assert(gDef === null, 'the default view narrows to null (null shows everything)')
+assert(visibleRows(gr, gDef).map(r => r.id).join() === 'r1,u1,u2,r2', 'a null view passes every row through in input order')
+assert(visibleRows(gr, null).map(r => r.id).join() === 'r1,u1,u2,r2', 'an explicit null view passes through identically')
+assert(visibleRows(null, gUnread).length === 0 && visibleRows(undefined, null).length === 0, 'null/undefined lists return [] under a real view and under none')
+assert(visibleRows(gr, { folders: new Set(), chats: new Set() }).length === 0, 'an empty view shows nothing')
+assert(visibleRows(gr, { folders: new Set(), chats: new Set(['u1', 'ghost']) }).map(r => r.id).join() === 'u1', 'a ghost id in the view invents no rows')
+const gWork = narrowView(G, gWk, '', ops.setView(G, { status: 'working' }).view, 'default')
+assert(visibleRows(gWk, gWork).map(r => r.id).join() === 'u2,r2', 'status Working keeps only rows carrying is_active')
+const gUn = narrowView(G, gWk, '', ops.setView(G, { status: 'unread' }).view, 'default')
+assert(visibleRows(gWk, gUn).map(r => r.id).join() === 'u1,u2', 'status Unread keeps only unread rows')
+const gPf = narrowView(G, gWk, '', ops.setView(G, { profile: 'current' }).view, 'here')
+assert(visibleRows(gWk, gPf).map(r => r.id).join() === 'r2', 'profile Current keeps only the focused profile (no profile reads as default and is excluded)')
+assert(visibleRows(gr, { folders: new Set(), chats: new Set(['r2', 'u1', 'r1']) }).map(r => r.id).join() === 'r1,u1,r2', 'visible order follows the input list, not the chats-set insertion order')
+const gTu = narrowView(G, gr, 'new', ops.setView(G, { unreadOnly: true }).view, 'default')
+assert(gTu.chats.size === 2 && gTu.chats.has('u1') && gTu.chats.has('u2'), 'text query and unread filter intersect (only matching unread rows survive)')
+assert(visibleRows(gIn.get('w'), gTu).map(r => r.id).join() === 'u1', 'under text∩unread the w list shows only u1')
 
 // Public-repo standard (issue #18): the private security route and the issue forms.
 // Field-level checks only, run once (catalog pass). GitHub reads these files as config.
