@@ -3,6 +3,11 @@
 All notable changes to this plugin. Versions follow `plugin.yaml`; each release is a
 `vX.Y.Z` tag and a catalog entry pinned to that tag's commit.
 
+## [Unreleased]
+
+### Tests
+- pin persisted-state normalization for `ops.rename`/`ops.addFolder` — trim-on-store, `String()` coercion, unknown-id no-op, `parent: null` round-trip, collapsed-parent clear (5 asserts, +5 ok per build → 184/199)
+
 ## [0.1.8] - 2026-10-19
 
 Fix + hardening release: the shipped bundle changed — `ancestorsOf` now stops at

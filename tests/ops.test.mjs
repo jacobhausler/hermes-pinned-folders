@@ -529,6 +529,25 @@ TG = ops.toggle(TG, 'mid')
 assert(!('mid' in TG.collapsed), 'toggle again re-expands it')
 assert(JSON.stringify(ops.toggle(normalize(null), 'ghost').collapsed) === '{"ghost":true}', 'toggle only ever writes the clicked id\'s key')
 
+// ── persisted-state normalization: rename/addFolder (nightly sweep c, 10-26) ──
+{
+  const base = ops.addFolder(normalize(null), null, 'R', 'r')
+  assert(ops.rename(base, 'r', '  Work  ').folders[0].name === 'Work',
+    'rename stores the trimmed name, not the padded one')
+  assert(ops.rename(base, 'r', 42).folders[0].name === '42',
+    'rename coerces a numeric name via String() before trimming')
+  const noop = ops.rename(base, 'ghost', 'Nope')
+  assert(JSON.stringify(noop) === JSON.stringify(base),
+    'rename on an unknown id returns a deep-equal state (no mutation)')
+  const top = ops.addFolder(base, undefined, 'Top', 'n')
+  const saved = top.folders.find(f => f.id === 'n')
+  assert(saved.parent === null && JSON.stringify(JSON.parse(JSON.stringify(saved))) === JSON.stringify(saved),
+    'addFolder with an absent parent stores parent null (JSON round-trip stable)')
+  const kid = ops.addFolder({ ...base, collapsed: { r: true } }, 'r', 'Kid', 'k')
+  assert(kid.folders.some(f => f.id === 'k' && f.parent === 'r') && !('r' in kid.collapsed),
+    'addFolder into a collapsed parent clears the parent collapsed key')
+}
+
 // ── #13 review: Collapse all under a filter (F1), Open all = visible rows (F2) ──
 const { collapseAllItem, chatsBeneath, visibleRows } = mod
 let collapsed = 0
