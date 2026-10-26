@@ -3,10 +3,16 @@
 All notable changes to this plugin. Versions follow `plugin.yaml`; each release is a
 `vX.Y.Z` tag and a catalog entry pinned to that tag's commit.
 
-## [Unreleased]
+## [0.1.9] - 2026-10-26
+
+Test-gain release: the shipped bundle is byte-identical to `v0.1.8` (`node
+scripts/build.mjs` rebuild is byte-identical at this head; `desktop/plugin.js`
+and `full/plugin.js` unchanged). No behavior change. Gates at this release:
+suite 184 ok catalog / 199 ok full, 0 failures, `hermes plugins validate` clean.
 
 ### Tests
-- pin persisted-state normalization for `ops.rename`/`ops.addFolder` — trim-on-store, `String()` coercion, unknown-id no-op, `parent: null` round-trip, collapsed-parent clear (5 asserts, +5 ok per build → 184/199)
+- pin the `visibleRows` edges — default/blank passthrough, null tolerance, view gating, order preserved (df65a6f, #61, @jacobhausler)
+- pin persisted-state normalization for `ops.rename`/`ops.addFolder` — trim-on-store, `String()` coercion, unknown-id no-op, `parent: null` round-trip, collapsed-parent clear (5 asserts, +5 ok per build → 184/199) (650d32c, #62, @jacobhausler)
 
 ## [0.1.8] - 2026-10-19
 
@@ -147,6 +153,7 @@ which uses only the SDK.
 - repo-admin standard: path-scoped CI `gates` check, CONTRIBUTING with the review
   checklist, PR template (#2, @jacobhausler)
 
+[0.1.9]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.9
 [0.1.8]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.8
 [0.1.7]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.7
 [0.1.6]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.6
