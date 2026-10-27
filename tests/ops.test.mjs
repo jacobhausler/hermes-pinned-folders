@@ -82,6 +82,38 @@ if (FULL) {
   assert(mem.get('hermes.desktop.pinnedSessions') === '["a"]' && mem.get('hermes.desktop.pinnedSessions.remote.https%3A%2F%2Fdesk') === '["c"]', 'scrub removed b from local + remote scope')
   assert(mem.get('hermes.desktop.pinnedSessionsOther') === '["b"]' && mem.get('hermes.desktop.sessionOrder') === '["b"]', 'scrub left unrelated keys alone')
 
+  // ── scrubCorePins defensive branches (IDLE-DRIVE sweep c, 10-27): each case runs on
+  // a FRESH Map + the same storage-facade shape. The happy-path `mem` above is reused
+  // by the unpin tests further down — it must stay untouched here.
+  const scrubStub = entries => {
+    const m = new Map(entries)
+    const writes = []
+    return [m, { get length() { return m.size }, key: i => [...m.keys()][i], getItem: k => m.get(k) ?? null, setItem: (k, v) => { writes.push(k); m.set(k, v) } }, writes]
+  }
+  {
+    const [m, s, w0] = scrubStub([['hermes.desktop.pinnedSessions', JSON.stringify(['a', 'b'])], ['hermes.desktop.pinnedSessions.remote.https%3A%2F%2Fdesk', JSON.stringify(['b', 'c'])]])
+    const snap = JSON.stringify([...m.entries()])
+    assert(scrubCorePins(s, new Set()) === 0 && !w0.length && JSON.stringify([...m.entries()]) === snap,
+      'empty ids: early return counts 0 and touches no storage key (snapshot byte-identical)')
+  }
+  {
+    const [m, s] = scrubStub([['hermes.desktop.pinnedSessions', '{"a",oops'], ['hermes.desktop.pinnedSessions.remote.https%3A%2F%2Fdesk', JSON.stringify(['b', 'c'])]])
+    assert(scrubCorePins(s, new Set(['b'])) === 1 && m.get('hermes.desktop.pinnedSessions') === '{"a",oops' && m.get('hermes.desktop.pinnedSessions.remote.https%3A%2F%2Fdesk') === '["c"]',
+      'malformed core-pin JSON: catch skips it without crash, raw text byte-unchanged, only the parseable remote key counted')
+  }
+  {
+    const [m, s] = scrubStub([['hermes.desktop.pinnedSessions', '{}'], ['hermes.desktop.pinnedSessions.remote.https%3A%2F%2Fdesk', '42']])
+    assert(scrubCorePins(s, new Set(['b'])) === 0 && m.get('hermes.desktop.pinnedSessions') === '{}' && m.get('hermes.desktop.pinnedSessions.remote.https%3A%2F%2Fdesk') === '42',
+      'valid non-array core-pin JSON: skipped, counts 0, both raw values byte-unchanged')
+  }
+  {
+    const [m, s, writes] = scrubStub([['hermes.desktop.pinnedSessions', JSON.stringify(['a', 'b'])], ['hermes.desktop.pinnedSessions.remote.https%3A%2F%2Fdesk', JSON.stringify(['b', 'c'])]])
+    const once = scrubCorePins(s, new Set(['b']))
+    const post = JSON.stringify([...m.entries()])
+    assert(once === 2 && writes.length === 2 && scrubCorePins(s, new Set(['b'])) === 0 && writes.length === 2 && JSON.stringify([...m.entries()]) === post,
+      'idempotent re-scrub: second pass counts 0, set-writes nothing, every value byte-identical to post-first-scrub')
+  }
+
   const now = 1_800_000_000_000, sec = now / 1000
   assert(isFreshUserChat({ source: 'desktop', started_at: sec - 2 }, now), 'fresh desktop chat auto-pins')
   assert(!isFreshUserChat({ source: 'desktop', started_at: sec - 3600 }, now), 'old chat reopened does NOT auto-pin')
