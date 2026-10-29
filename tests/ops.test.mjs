@@ -589,6 +589,16 @@ assert(!caOff.disabled && caOff.label === 'Collapse all' && collapsed === 1, 'co
 const caOn = collapseAllItem({ filtering: true, empty: false, collapse: () => collapsed++ })
 caOn.onSelect()
 assert(caOn.disabled === true && /clear filters to collapse/i.test(caOn.label) && collapsed === 1, 'collapse all is disabled while a filter is active, with the reason in its label')
+// est-om14c (nightly pass): the two branches the trio above leaves unpinned —
+// the unfiltered branch's `disabled: !!empty` at empty:true, and the filtered
+// branch's no-op onSelect, pinned explicitly per branch.
+const caEmptyFn = () => { collapsed++ }
+const caEmpty = collapseAllItem({ filtering: false, empty: true, collapse: caEmptyFn })
+caEmpty.onSelect()
+assert(caEmpty.disabled === true && caEmpty.label === 'Collapse all' && caEmpty.onSelect === caEmptyFn && collapsed === 2, 'collapse all is disabled when nothing can collapse, keeps its plain label, and still runs the passed collapse')
+const caOnEmpty = collapseAllItem({ filtering: true, empty: true, collapse: () => collapsed++ })
+caOnEmpty.onSelect()
+assert(caOnEmpty.disabled === true && collapsed === 2, 'filtered collapse-all onSelect is a hard no-op (counter unchanged) even when empty:true')
 let G = ops.addFolder(ops.addFolder(normalize(null), null, 'W', 'w'), 'w', 'Sub', 'sub')
 for (const [sid, f] of [['r1', 'w'], ['u1', 'w'], ['u2', 'sub'], ['r2', 'sub']]) G = ops.placeSession(G, sid, f)
 const gr = [{ id: 'r1', title: 'read' }, { id: 'u1', title: 'new', unread: true }, { id: 'u2', title: 'news', unread: true }, { id: 'r2', title: 'old' }]
