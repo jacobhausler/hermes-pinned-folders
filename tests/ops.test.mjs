@@ -589,6 +589,16 @@ assert(!caOff.disabled && caOff.label === 'Collapse all' && collapsed === 1, 'co
 const caOn = collapseAllItem({ filtering: true, empty: false, collapse: () => collapsed++ })
 caOn.onSelect()
 assert(caOn.disabled === true && /clear filters to collapse/i.test(caOn.label) && collapsed === 1, 'collapse all is disabled while a filter is active, with the reason in its label')
+// est-om14c: pin the empty:true branch (nothing-to-collapse) — runs in both builds.
+const caEmpty = collapseAllItem({ filtering: false, empty: true, collapse: () => collapsed++ })
+assert(caEmpty.disabled === true && caEmpty.label === 'Collapse all',
+  'collapse all is disabled when there is nothing to collapse, label carries no clear-filters reason (both disabled reasons stay distinguishable)')
+caEmpty.onSelect()
+assert(collapsed === 2, 'the empty branch routes onSelect to the passed collapse (the menu host gates on disabled; the pure function does not swallow the callback)')
+const caBoth = collapseAllItem({ filtering: true, empty: true, collapse: () => collapsed++ })
+caBoth.onSelect()
+assert(caBoth.disabled === true && /clear filters to collapse/i.test(caBoth.label) && collapsed === 2,
+  'filtering precedence when both flags hold: filtering-branch label wins and onSelect is an explicit per-branch no-op (counter unchanged)')
 let G = ops.addFolder(ops.addFolder(normalize(null), null, 'W', 'w'), 'w', 'Sub', 'sub')
 for (const [sid, f] of [['r1', 'w'], ['u1', 'w'], ['u2', 'sub'], ['r2', 'sub']]) G = ops.placeSession(G, sid, f)
 const gr = [{ id: 'r1', title: 'read' }, { id: 'u1', title: 'new', unread: true }, { id: 'u2', title: 'news', unread: true }, { id: 'r2', title: 'old' }]
