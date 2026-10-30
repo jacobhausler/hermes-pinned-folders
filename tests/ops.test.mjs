@@ -442,6 +442,10 @@ assert(oldMenu.find(it => /^Unpin/.test(it.label || '')).disabled === true, 'men
 // full-only).
 const GD = { altKey: false, ctrlKey: false, metaKey: false, shiftKey: false }
 assert(pinnedRowClick({ ...GD, ctrlKey: true }) === 'tab', 'gesture: ctrl opens in a new tab')
+assert(pinnedRowClick({ ...GD, altKey: true }) === 'open', 'gesture: alt alone never becomes tab')
+assert(pinnedRowClick({ ...GD, ctrlKey: true, shiftKey: true }) === 'tab', 'gesture: ctrl+shift wins precedence over destructive unpin')
+assert(pinnedRowClick({ ...GD, metaKey: true, ctrlKey: true }) === 'tab', 'gesture: meta+ctrl resolves to tab, ctrl holds the precedence')
+assert(pinnedRowClick({ ...GD, altKey: true, ctrlKey: true, shiftKey: true }) === 'open', 'gesture: alt+ctrl+shift — archive language wins, neither unpin nor tab')
 {
   const spy = { opens: [], unpins: 0, prevented: 0, stopped: 0 }
   const ev = { ...GD, shiftKey: true, preventDefault: () => spy.prevented++, stopPropagation: () => spy.stopped++ }
