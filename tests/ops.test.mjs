@@ -442,6 +442,11 @@ assert(oldMenu.find(it => /^Unpin/.test(it.label || '')).disabled === true, 'men
 // full-only).
 const GD = { altKey: false, ctrlKey: false, metaKey: false, shiftKey: false }
 assert(pinnedRowClick({ ...GD, ctrlKey: true }) === 'tab', 'gesture: ctrl opens in a new tab')
+// est-nj9n0: mapper precedence edges the batches above leave unpinned.
+assert(pinnedRowClick({ ...GD, altKey: true }) === 'open', 'gesture: alt alone opens (alt never maps to tab here)')
+assert(pinnedRowClick({ ...GD, ctrlKey: true, shiftKey: true }) === 'tab', 'gesture: ctrl+shift takes the tab branch before bare-shift unpin — unpin must not fire')
+assert(pinnedRowClick({ ...GD, metaKey: true, ctrlKey: true }) === 'tab', 'gesture: meta+ctrl opens in a new tab')
+assert(pinnedRowClick({ ...GD, altKey: true, ctrlKey: true, shiftKey: true }) === 'open', 'gesture: alt+ctrl+shift stays on the archive-substitute branch (open)')
 {
   const spy = { opens: [], unpins: 0, prevented: 0, stopped: 0 }
   const ev = { ...GD, shiftKey: true, preventDefault: () => spy.prevented++, stopPropagation: () => spy.stopped++ }

@@ -22,8 +22,8 @@ Node 22 or newer. Nothing to install.
 ```sh
 node scripts/build.mjs          # → built desktop/plugin.js
 node tests/build.test.mjs    # strip() parser → 10 "ok" lines, exit 0
-node tests/ops.test.mjs         # catalog build → 186 "ok" lines, exit 0
-node tests/ops.test.mjs full    # full build   → 205 "ok" lines, exit 0
+node tests/ops.test.mjs         # catalog build → 190 "ok" lines, exit 0
+node tests/ops.test.mjs full    # full build   → 209 "ok" lines, exit 0
 node scripts/sdk-contract.mjs /tmp/hermes-agent  # → "sdk-contract: OK (28 imports resolved at <short-HEAD-of-checkout>)", exit 0; CI checks the checkout out at HERMES_PIN first (see .github/workflows/ci.yml), so the printed ref must equal the pin's
 hermes plugins validate .       # → "Validation passed." (catalog admission; not an SDK-only proof)
 ```
