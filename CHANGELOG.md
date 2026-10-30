@@ -3,6 +3,18 @@
 All notable changes to this plugin. Versions follow `plugin.yaml`; each release is a
 `vX.Y.Z` tag and a catalog entry pinned to that tag's commit.
 
+## [0.1.10] - 2026-10-30
+
+Test-gain release: the shipped bundle is byte-identical to `v0.1.9` (`node
+scripts/build.mjs` rebuild is byte-identical at this head; `desktop/plugin.js`
+and `full/plugin.js` unchanged). No behavior change. Gates at this release:
+suite 190 ok catalog / 209 ok full, 0 failures, `hermes plugins validate` clean.
+
+### Tests
+- pin `scrubCorePins` defensive branches — empty-ids, malformed JSON, non-array JSON, idempotent re-scrub (full-only, +4 ok → 184/203) (fda9a65, #64, @jacobhausler)
+- pin `collapseAllItem` empty:true edges (both builds, +2 ok → 186/205) (20bfbb8, #65, @jacobhausler)
+- pin `pinnedRowClick` precedence edges — alt-only, ctrl+shift, meta+ctrl, alt+ctrl+shift (both builds, +4 ok → 190/209) (afa6519, #67, @jacobhausler)
+
 ## [0.1.9] - 2026-10-26
 
 Test-gain release: the shipped bundle is byte-identical to `v0.1.8` (`node
@@ -153,6 +165,7 @@ which uses only the SDK.
 - repo-admin standard: path-scoped CI `gates` check, CONTRIBUTING with the review
   checklist, PR template (#2, @jacobhausler)
 
+[0.1.10]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.10
 [0.1.9]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.9
 [0.1.8]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.8
 [0.1.7]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.7
