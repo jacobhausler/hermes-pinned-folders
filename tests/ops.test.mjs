@@ -741,3 +741,38 @@ if (FULL) {
     'sdk-contract OK line carries the checkout short HEAD (' + head + '), not a fixed label')
   rmSync(dir, { recursive: true, force: true })
 }
+// ── unpinAndReconcile pacing contract via injected seams (both builds; est-u4zo4) ──
+// Pins the reconcile pacing: refresh never exceeds the reads budget; sleep fires
+// exactly once between reads (never before the first) with the injected gapMs;
+// a row vanishing only at the final read still prunes. Full build short-circuits
+// on the real PATCH ack, so its pacing shape is zero reads / zero sleeps.
+{
+  const prevWin = globalThis.window
+  if (FULL) globalThis.window = { hermesDesktop: { api: async () => ({}) }, localStorage: { length: 0, key: () => null, getItem: () => null, setItem: () => {} } }
+  // vanishAt: the refresh number on which the row first drops off (Infinity -> reads always keep the id)
+  const paced = async (reads, gapMs, vanishAt) => {
+    const h = { trace: [], sleeps: [], forgot: [], errs: [], refreshes: 0 }
+    const out = await mod.unpinAndReconcile({ id: 's1', profile: 'p1' }, {
+      sessionsHost: { sessions: { pin: async () => {} } },
+      refresh: async () => { h.trace.push('R'); return ++h.refreshes >= vanishAt ? [{ id: 's0' }] : [{ id: 's1' }] },
+      forget: id => h.forgot.push(id),
+      notifyError: e => h.errs.push(e.message),
+      reads,
+      sleep: async ms => { h.trace.push('S'); h.sleeps.push(ms) },
+      gapMs
+    })
+    return { h, out }
+  }
+  let r = await paced(3, 250, Infinity)
+  assert(r.out === (FULL ? 'pruned' : 'kept') && r.h.forgot.join() === (FULL ? 's1' : ''),
+    'pacing: acked unpin prunes at once (full) / keeps placement while every read still lists the id (catalog) -> ' + r.out)
+  assert(r.h.refreshes === (FULL ? 0 : 3), 'pacing: refresh calls never exceed reads (' + r.h.refreshes + ' for reads=3)')
+  assert(r.h.sleeps.length === (FULL ? 0 : 2), 'pacing: sleep awaited exactly reads-1 times (' + r.h.sleeps.length + ')')
+  assert((FULL ? '' : 'R,S,R,S,R') === r.h.trace.join(',') && (FULL || r.h.sleeps.every(ms => ms === 250)),
+    'pacing: every gap carries the injected gapMs=250 and none fires before the first read (' + r.h.trace.join(',') + ')')
+  assert(!r.h.errs.length, 'pacing: an acked pin records no notifyError')
+  r = await paced(3, 250, 3)
+  assert(r.out === 'pruned' && r.h.forgot.join() === 's1' && r.h.refreshes === (FULL ? 0 : 3) && r.h.sleeps.length === (FULL ? 0 : 2),
+    'pacing: row vanishing only at the final read still returns pruned after the full read+gap budget (' + r.h.trace.join(',') + ')')
+  if (prevWin) globalThis.window = prevWin; else delete globalThis.window
+}
