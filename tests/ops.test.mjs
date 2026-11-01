@@ -776,3 +776,33 @@ if (FULL) {
     'pacing: row vanishing only at the final read still returns pruned after the full read+gap budget (' + r.h.trace.join(',') + ')')
   if (prevWin) globalThis.window = prevWin; else delete globalThis.window
 }
+
+// ── filterView path-reveal contract (both builds; est-7t0s2) ──
+// Six clauses of how one query reveals the tree: a folder-name hit with nothing
+// beneath pulls its chain and adds no chats; placement under a name-matching
+// folder lands a chat in .chats with no text hit of its own; a chat text hit
+// drags its FULL placement chain into .folders (the row-loop chain.forEach,
+// not the folder-name loop); placement under a dead folder id degrades to
+// unplaced with no phantom folder; unplaced rows match by text alone; and the
+// whole match is case-insensitive. Fixture built through ops, as the pane does.
+{
+  let G = normalize(null)
+  G = ops.addFolder(G, null, 'Root', 'rt'); G = ops.addFolder(G, 'rt', 'Mid', 'md'); G = ops.addFolder(G, 'md', 'Leaf', 'lf')
+  G = ops.addFolder(G, null, 'Other', 'ot'); G = ops.addFolder(G, null, 'Zeta', 'zet')
+  G = ops.placeSession(G, 'deep', 'lf'); G = ops.placeSession(G, 'flat', 'ot')
+  const rows = [{ id: 'deep', title: 'Q4 budget', preview: 'roadmap' }, { id: 'flat', title: 'Vacation plans' }, { id: 'loose', title: 'Grocery list' }]
+  const j1 = filterView(G, rows, 'zet')
+  assert(j1.folders.has('zet') && j1.chats.size === 0, 'path-reveal: folder-name hit with nothing beneath pulls its chain, adds no chats')
+  const j2 = filterView(G, rows, 'leaf')
+  assert(j2.chats.has('deep') && !j2.chats.has('flat'), 'path-reveal: chat lands in .chats purely by placement under a name-matching folder')
+  const j3 = filterView(G, rows, 'budget')
+  assert(j3.chats.has('deep') && j3.folders.has('lf') && j3.folders.has('md') && j3.folders.has('rt'), 'path-reveal: chat text hit pulls its FULL placement chain lf,md,rt into .folders')
+  let j4 = null, j4err = ''
+  try { j4 = filterView({ folders: [{ id: 'f', name: 'Alpha', parent: null }], placed: { g: 'ghost' }, order: [], collapsed: {} }, [{ id: 'g', title: 'zzz' }], 'alpha') } catch (e) { j4err = String(e && e.message) }
+  assert(!j4err && j4.folders.has('f') && !j4.folders.has('ghost') && j4.chats.size === 0, 'path-reveal: placement under an unknown folder id degrades to unplaced, no phantom folder')
+  const j5 = filterView(G, rows, 'grocery')
+  assert(j5.chats.has('loose') && j5.folders.size === 0, 'path-reveal: unplaced rows match by text only')
+  const j6 = filterView(G, rows, 'BUDGET')
+  const joinSet = s => [...s].sort().join(',')
+  assert(joinSet(j6.folders) === joinSet(j3.folders) && joinSet(j6.chats) === joinSet(j3.chats), 'path-reveal: case-insensitive, BUDGET equals budget in .folders and .chats')
+}
