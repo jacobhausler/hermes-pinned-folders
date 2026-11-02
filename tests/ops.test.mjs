@@ -200,6 +200,42 @@ if (FULL) {
     'unpin scrubbed t1 + troot from core pin cache (scrubTombstones ran)')
   assert(tombstoned({ id: 't1' }, t0 + 61_000) === false, 'tombstone expires past TOMBSTONE_MS=60_000 -> row shows again')
   assert(tombstoned({ id: 'never', _lineage_root_id: 'nope' }, t0 + 30_000) === false, 'never-unpinned row is never tombstoned')
+
+  // ── pinAndJudge seam edges (full-only). Drives the injectable seams of
+  // pinAndJudge(row, pin, judge) — full/plugin.js: `await pin(row); judge(pinIdsOf(row))`;
+  // pinIdsOf: `[row.id, row._lineage_root_id].filter(Boolean)` drops falsy slots. judge
+  // captures JSON.stringify([...ids]): a missing key, an undefined slot (unfiltered
+  // stringifies '["solo",null]'), an empty string, or a reordering all change the captured
+  // bytes. pin and judge share one monotonic tick, so strict ordering is measured, not
+  // assumed. The rejecting-pin path (pin attempted, judge untouched) is already pinned
+  // above ('failed PATCH cannot persist judged ids').
+  const ajRun = async (row, pin) => {
+    let tick = 0, pinnedTick = 0, judgedTick = 0, judgeCalls = 0, captured = null
+    await pinAndJudge(row, pin ?? (async () => { pinnedTick = ++tick }),
+      ids => { captured = JSON.stringify([...ids]); judgeCalls++; judgedTick = ++tick })
+    return { captured, judgeCalls, pinnedTick, judgedTick }
+  }
+  const a1 = await ajRun({ id: 'solo' })
+  assert(a1.captured === '["solo"]' && a1.judgeCalls === 1,
+    'pinAndJudge: row with no _lineage_root_id key judges exactly ["solo"] — no undefined slot, no empty string')
+  const a2a = await ajRun({ id: 'e1', _lineage_root_id: '' })
+  const a2b = await ajRun({ id: 'e2', _lineage_root_id: undefined })
+  assert(a2a.captured === '["e1"]' && a2b.captured === '["e2"]',
+    'pinAndJudge: present-but-falsy roots ("" and undefined) never ride — judge sees exactly ["e1"] / ["e2"]')
+  const a3 = await ajRun({ id: 'ord', _lineage_root_id: 'oroot' })
+  assert(a3.captured === '["ord","oroot"]',
+    'pinAndJudge: judge receives pinIdsOf ORDER — row id first, lineage root second')
+  let ajResolve, ajCalls = 0, ajCaptured = null
+  const ajT = { n: 0, pin: 0, judge: 0 }
+  const ajP = pinAndJudge({ id: 'pend' },
+    () => { ajT.pin = ++ajT.n; return new Promise(r => { ajResolve = r }) },
+    ids => { ajT.judge = ++ajT.n; ajCalls++; ajCaptured = JSON.stringify([...ids]) })
+  await new Promise(r => setTimeout(r, 0))
+  assert(ajCalls === 0, 'pinAndJudge: judge NOT called while the pin promise is pending (still 0 after a setTimeout(0) flush)')
+  ajResolve()
+  await ajP
+  assert(ajCalls === 1 && ajT.judge === ajT.pin + 1 && ajCaptured === '["pend"]',
+    'pinAndJudge: judge runs EXACTLY ONCE, strictly after pin resolution (judgedTick === pinnedTick + 1)')
 } else {
   const leaks = ['hermesDesktop', 'localStorage', 'querySelector', 'MutationObserver', 'BroadcastChannel', 'composer.middleware', 'translateNow'].filter(w => src.includes(w))
   if (/\bdocument\s*\./.test(src.replace(/^\s*(\/\/|\*).*$/gm, ''))) leaks.push('document')
