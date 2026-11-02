@@ -3,6 +3,11 @@
 All notable changes to this plugin. Versions follow `plugin.yaml`; each release is a
 `vX.Y.Z` tag and a catalog entry pinned to that tag's commit.
 
+## Unreleased
+
+### Tests
+- pin `pinAndJudge` seam edges — no-key vs falsy roots, `pinIdsOf` order, judge-after-await, judge-exactly-once (5 asserts, full-only, +5 ok → 202/226) (d1b74e6, #74, @jacobhausler)
+
 ## [0.1.10] - 2026-10-30
 
 Test-gain release: the shipped bundle is byte-identical to `v0.1.9` (`node
