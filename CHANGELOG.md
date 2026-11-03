@@ -6,6 +6,7 @@ All notable changes to this plugin. Versions follow `plugin.yaml`; each release 
 ## Unreleased
 
 ### Tests
+- pin `menuChildren` render contract — falsy-drop-before-index keys, `kit.Separator` under both kit shapes, header/swatches/`ColorSwatches` wiring incl. `value || null`, destructive variant, indent math, `[icon?, label]` order (both builds, +11 ok → 213/237) (3393ef6, #75, @jacobhausler)
 - pin `pinAndJudge` seam edges — no-key vs falsy roots, `pinIdsOf` order, judge-after-await, judge-exactly-once (5 asserts, full-only, +5 ok → 202/226) (d1b74e6, #74, @jacobhausler)
 
 ## [0.1.10] - 2026-10-30
