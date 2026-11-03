@@ -7,6 +7,7 @@ All notable changes to this plugin. Versions follow `plugin.yaml`; each release 
 
 ### Tests
 - pin `pinAndJudge` seam edges — no-key vs falsy roots, `pinIdsOf` order, judge-after-await, judge-exactly-once (5 asserts, full-only, +5 ok → 202/226) (d1b74e6, #74, @jacobhausler)
+- pin `menuChildren` contract — hole-compaction before key minting, `'-'` separator, header div, variant/indent math 8+12*i, icon+label children pair, swatch block, key stability; exported from the source, jsx recorder stub (8 asserts, both builds, +8 ok → 210/234) (PENDING_SHA, #PENDING, @jacobhausler)
 
 ## [0.1.10] - 2026-10-30
 

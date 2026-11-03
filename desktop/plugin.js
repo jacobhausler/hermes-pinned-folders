@@ -598,7 +598,8 @@ const CONTEXT = { Item: ContextMenuItem, Separator: ContextMenuSeparator }
 
 // One item list feeds both the ⋯ dropdown and the right-click menu.
 // Item shapes: '-' | { header } | { swatches, value, onChange } | { label, icon, onSelect, … }
-function menuChildren(items, kit) {
+// Exported for tests: a pure builder, observable through the test jsx recorder stub.
+export function menuChildren(items, kit) {
   return items.filter(Boolean).map((it, i) => {
     if (it === '-') return jsx(kit.Separator, {}, 'sep' + i)
     if (it.header)
