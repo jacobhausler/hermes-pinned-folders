@@ -842,3 +842,79 @@ if (FULL) {
   const joinSet = s => [...s].sort().join(',')
   assert(joinSet(j6.folders) === joinSet(j3.folders) && joinSet(j6.chats) === joinSet(j3.chats), 'path-reveal: case-insensitive, BUDGET equals budget in .folders and .chats')
 }
+
+// ── menuChildren contract pins (both builds; est-831vb) ──
+// menuChildren is internal (unexported) in both builds, so the contract is pinned
+// by source-extracting it from the already-read `src` and re-building the real
+// function with injected fakes: a recording jsx and marker bindings for the three
+// module-scope names it references (ColorSwatches, PROFILE_SWATCHES, Codicon).
+// The terminating `}` is the first line-initial brace — every brace inside is
+// indented — so the lazy match cannot overrun; it captures the complete 1199-char
+// function identically in both builds. All eleven clauses are behavioural (R6):
+// each fails loudly on broken rendering, none asserts source text.
+{
+  const mcText = src.match(/function menuChildren\(items, kit\) \{[\s\S]*?\n\}/)
+  assert(mcText !== null, 'menuChildren: source-extract matches the ' + (FULL ? 'full' : 'catalog') + ' build — pin stays live')
+  const CS = { cs: 'ColorSwatches' }, CODI = { codi: 'Codicon' }, PS = { ps: 'PROFILE_SWATCHES' }
+  const jsx = (type, props, key) => ({ type, props, key })
+  const menu = new Function('jsx', 'ColorSwatches', 'PROFILE_SWATCHES', 'Codicon',
+    mcText[0] + ';return menuChildren')(jsx, CS, PS, CODI)
+  const KIT_DD = { Separator: 'DropdownMenuSeparator', Item: 'DropdownMenuItem' }
+  const KIT_CTX = { Separator: 'ContextMenuSeparator', Item: 'ContextMenuItem' }
+
+  // falsy items drop BEFORE indexing: removed slots consume no key, so '-' is
+  // sep0 and the header h1 (pins the filter(Boolean).map order).
+  const keys = menu([null, 0, '-', { header: 'H' }], KIT_DD).map(e => e.key).join()
+  assert(keys === 'sep0,h1', 'menuChildren: falsy items drop before indexing — removed slots consume no key (' + keys + ')')
+
+  // '-' routes through the kit, so both menu wrappers share one builder:
+  // DropdownMenuSeparator for RowMenu, ContextMenuSeparator for WithContextMenu.
+  assert(menu(['-'], KIT_DD)[0].type === KIT_DD.Separator && menu(['-'], KIT_DD)[0].key === 'sep0',
+    'menuChildren: "-" renders kit.Separator under the dropdown-shaped kit (RowMenu path)')
+  assert(menu(['-'], KIT_CTX)[0].type === KIT_CTX.Separator,
+    'menuChildren: "-" renders kit.Separator under the context-shaped kit (WithContextMenu path)')
+
+  // header rows are plain tertiary-styled divs carrying their text verbatim.
+  const h = menu([{ header: 'H' }], KIT_DD)[0]
+  assert(h.type === 'div' && h.props.className === 'text-(--ui-text-tertiary)' && h.props.children === 'H' &&
+    h.props.style.padding === '4px 8px 2px' && h.props.style.fontSize === '0.6875rem',
+    'menuChildren: header renders a tertiary-styled div with its exact padding/fontSize, children verbatim')
+
+  // swatches rows: width-locked div that swallows the menu-close — stopPropagation
+  // fires exactly once per click, no more (a second stop would eat sibling handlers).
+  const onChange = () => {}
+  const sw = menu([{ swatches: true, value: '#abc', onChange }], KIT_DD)[0]
+  let stops = 0
+  sw.props.onClick({ stopPropagation: () => { stops++ } })
+  assert(sw.type === 'div' && sw.props.style.width === 176 && stops === 1,
+    'menuChildren: swatches row is a 176px div whose onClick stops propagation exactly once (' + stops + ')')
+
+  // ...its child is ColorSwatches wired to the plugin-owned palette binding, the
+  // clear label, the item's value, and the caller's onChange by identity.
+  const csEl = sw.props.children
+  assert(csEl.type === CS && csEl.props.swatches === PS && csEl.props.clearLabel === 'Default color' &&
+    csEl.props.value === '#abc' && csEl.props.onChange === onChange,
+    'menuChildren: swatches child is ColorSwatches(PROFILE_SWATCHES binding, clearLabel "Default color", value passthrough, onChange identity)')
+  const csNull = menu([{ swatches: true, onChange }], KIT_DD)[0].props.children
+  assert(csNull.props.value === null, 'menuChildren: swatches row with no value passes value || null, never undefined')
+
+  // plain rows: variant follows it.destructive — both arms.
+  const rows = menu([{ label: 'A', destructive: true }, { label: 'B' }], KIT_DD)
+  assert(rows[0].props.variant === 'destructive' && rows[1].props.variant === 'default',
+    'menuChildren: variant is destructive only when it.destructive, else default (both arms)')
+
+  // indent math: paddingLeft = 8 + 12*indent; absent indent leaves style undefined
+  // (a truthiness-tested style would flip this red).
+  const ind = menu([{ label: 'I', indent: 2 }, { label: 'J' }], KIT_DD)
+  assert(ind[0].props.style.paddingLeft === 32 && ind[1].props.style === undefined,
+    'menuChildren: indent 2 -> paddingLeft 32 (8 + 12*2), no indent -> style undefined')
+
+  // children are [icon?, label]: Codicon first under key i, span under key l;
+  // without an icon the null slot stays, so the label keeps index 1.
+  const ic = menu([{ label: 'Pin', icon: 'pin' }], KIT_DD)[0].props.children
+  const no = menu([{ label: 'L' }], KIT_DD)[0].props.children
+  assert(ic.length === 2 && ic[0].type === CODI && ic[0].props.name === 'pin' && ic[0].props.size === '0.8125rem' && ic[0].key === 'i' &&
+    ic[1].type === 'span' && ic[1].props.children === 'Pin' && ic[1].key === 'l' &&
+    no[0] === null && no[1].props.children === 'L',
+    'menuChildren: children order [icon?, label] — Codicon(i)/span(l) with icon, null slot kept without')
+}
