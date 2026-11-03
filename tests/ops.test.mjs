@@ -14,7 +14,11 @@ const sdkNames = [...src.matchAll(/import\s*\{([^}]*)\}\s*from\s*'([^']+)'/g)].f
 // `host` is the one SDK import used as an object, not a component: register()
 // (full build) reads host.state.focusedStoredSessionId's get/listen at call time.
 globalThis.__pfHost = { state: { focusedStoredSessionId: { get: () => 'f1', listen: () => () => {} } } }
-const stub = 'export const ' + [...new Set(sdkNames)].map(n => (n === 'host' ? 'host=globalThis.__pfHost' : n + '=()=>null')).join(',') + '; export default {}'
+// `jsx`/`jsxs` are the two imports a UI-shape test must see THROUGH: the stub records
+// (type, props, key) and returns the element, so pure builders like menuChildren are
+// assertable without a renderer. Every other name stays a `()=>null` component stub.
+globalThis.__pfJsx = (type, props, key) => ({ type, props, key })
+const stub = 'export const ' + [...new Set(sdkNames)].map(n => (n === 'host' ? 'host=globalThis.__pfHost' : n === 'jsx' || n === 'jsxs' ? n + '=globalThis.__pfJsx' : n + '=()=>null')).join(',') + '; export default {}'
 register('data:text/javascript,' + encodeURIComponent(`
 export async function resolve(s, c, n) {
   if (s === '@hermes/plugin-sdk' || s === 'react' || s === 'react/jsx-runtime') return { url: 'stub:' + s, shortCircuit: true }
@@ -841,4 +845,58 @@ if (FULL) {
   const j6 = filterView(G, rows, 'BUDGET')
   const joinSet = s => [...s].sort().join(',')
   assert(joinSet(j6.folders) === joinSet(j3.folders) && joinSet(j6.chats) === joinSet(j3.chats), 'path-reveal: case-insensitive, BUDGET equals budget in .folders and .chats')
+}
+
+// ── menuChildren contract (both builds; est-831vb) ──
+// The one item list feeding both the ⋯ dropdown and the right-click menu, pinned
+// through the jsx recorder stub — no renderer. Eight clauses: (1) falsy entries drop
+// BEFORE index/key minting, so a conditional item renumbers every survivor; (2) '-'
+// becomes the kit's own Separator with empty props; (3) headers are plain tertiary
+// 'div's, never kit items; (4) items carry variant destructive/default with disabled
+// and onSelect passed through; (5) indent math is exactly paddingLeft 8+12*i and a
+// falsy indent keeps style undefined; (6) the children slot is the fixed
+// [icon-or-null at key 'i', label span at key 'l'] pair; (7) swatches rows wrap
+// ColorSwatches in a 176px stopPropagation div carrying value||null, the row's own
+// onChange and clearLabel 'Default color'; (8) keys are kind-tagged, positional and
+// identical across repeated calls.
+{
+  const { menuChildren } = mod
+  const KIT = { Item: 'KIT-ITEM', Separator: 'KIT-SEP' }
+  const on = () => 'sel'
+  const holes = menuChildren([null, '-', false, { header: 'H' }, { label: 'Go', onSelect: on }], KIT)
+  assert(holes.length === 3 && holes.map(e => e.key).join() === 'sep0,h1,m2',
+    'menuChildren holes: null/false entries drop before keys are minted — survivors get compacted positional keys')
+  assert(holes[0].type === KIT.Separator && Object.keys(holes[0].props).length === 0,
+    "menuChildren separator: '-' renders the kit's own Separator with an empty props object")
+  assert(holes[1].type === 'div' && holes[1].props.className === 'text-(--ui-text-tertiary)' && holes[1].props.children === 'H' &&
+    holes[1].props.style.padding === '4px 8px 2px' && holes[1].props.style.fontSize === '0.6875rem',
+    'menuChildren header: a plain tertiary div with the exact padding/typography style, never a kit item')
+  const v = menuChildren([{ label: 'A', onSelect: on }, { label: 'B', destructive: true, disabled: true }], KIT)
+  assert(v[0].type === KIT.Item && v[0].props.variant === 'default' && v[0].props.onSelect === on && v[0].props.disabled === undefined &&
+    v[1].props.variant === 'destructive' && v[1].props.disabled === true,
+    "menuChildren variant: plain items get variant 'default' with disabled/onSelect passed through; destructive:true flips to 'destructive'")
+  const ind = menuChildren([{}, { label: 'x', indent: 1 }, { label: 'y', indent: 3 }, { label: 'z', indent: 0 }], KIT)
+  assert(ind.map(e => (e.props.style ? e.props.style.paddingLeft : 'undef').toString()).join() === 'undef,20,44,undef',
+    'menuChildren indent: paddingLeft is exactly 8+12*i (1 -> 20, 3 -> 44); falsy indent keeps style undefined')
+  const pair = menuChildren([{ label: 'No icon' }, { label: 'With', icon: 'pinned' }], KIT)
+  const kids = e => e.props.children.map(c => (c === null ? 'null' : (typeof c.type === 'function' ? c.type.name : c.type) + ':' + c.key)).join()
+  assert(kids(pair[0]) === 'null,span:l' && kids(pair[1]) === 'Codicon:i,span:l' && pair[1].props.children[1].props.children === 'With',
+    "menuChildren children slot: the fixed [icon-or-null at key 'i', label span at key 'l'] pair — the label span is unconditional")
+  const onChange = () => 'chg'
+  const sw = menuChildren([{ swatches: true, value: 'red', onChange }, { swatches: true }], KIT)
+  let stopped = 0
+  sw[0].props.onClick({ stopPropagation: () => stopped++ })
+  const inner = e => e.props.children
+  // The wrapper passes the SDK's PROFILE_SWATCHES by reference; under the test stub
+  // that constant is the name-inferred `()=>null` arrow, so identity shows as .name.
+  assert(sw[0].type === 'div' && sw[0].key === 'sw0' && sw[0].props.style.width === 176 && stopped === 1 &&
+    typeof inner(sw[0]).type === 'function' && inner(sw[0]).type.name === 'ColorSwatches' &&
+    typeof inner(sw[0]).props.swatches === 'function' && inner(sw[0]).props.swatches.name === 'PROFILE_SWATCHES' &&
+    inner(sw[0]).props.value === 'red' && inner(sw[0]).props.onChange === onChange &&
+    inner(sw[0]).props.clearLabel === 'Default color' && inner(sw[1]).props.value === null,
+    "menuChildren swatches: ColorSwatches inside a 176px stopPropagation div, carrying value||null, the row's own onChange, clearLabel 'Default color'")
+  const MIX = ['-', { swatches: true, onChange }, { header: 'H' }, { label: 'L' }]
+  assert(menuChildren(MIX, KIT).map(e => e.key).join() === 'sep0,sw1,h2,m3' &&
+    menuChildren(MIX, KIT).map(e => e.key).join() === 'sep0,sw1,h2,m3',
+    'menuChildren keys: kind-tagged and positional (sep/sw/h/m + index), identical across repeated calls')
 }
