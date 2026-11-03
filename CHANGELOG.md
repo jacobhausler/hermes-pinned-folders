@@ -3,9 +3,16 @@
 All notable changes to this plugin. Versions follow `plugin.yaml`; each release is a
 `vX.Y.Z` tag and a catalog entry pinned to that tag's commit.
 
-## Unreleased
+## [0.1.11] - 2026-11-03
+
+Test-gain release: the shipped bundle is byte-identical to `v0.1.10` (`node
+scripts/build.mjs` rebuild is byte-identical at this head; `desktop/plugin.js`
+and `full/plugin.js` unchanged). No behavior change. Gates at this release:
+suite 210 ok catalog / 234 ok full, 0 failures, `hermes plugins validate` clean.
 
 ### Tests
+- pin `unpinAndReconcile` pacing contract — reads cap, inter-read gaps, seam injection (both builds, +6 ok → 196/215) (b1db88d, #71, @jacobhausler)
+- pin `filterView` path-reveal contract — chain pull-in, placement-chain match, ghost/unplaced rows, case-insensitivity (both builds, +6 ok → 202/221) (cdf3364, #73, @jacobhausler)
 - pin `pinAndJudge` seam edges — no-key vs falsy roots, `pinIdsOf` order, judge-after-await, judge-exactly-once (5 asserts, full-only, +5 ok → 202/226) (d1b74e6, #74, @jacobhausler)
 - pin `menuChildren` contract — hole-compaction before key minting, `'-'` separator, header div, variant/indent math 8+12*i, icon+label children pair, swatch block, key stability; exported from the source, jsx recorder stub (8 asserts, both builds, +8 ok → 210/234) (d2f8855, #76, @jacobhausler)
 
@@ -171,6 +178,7 @@ which uses only the SDK.
 - repo-admin standard: path-scoped CI `gates` check, CONTRIBUTING with the review
   checklist, PR template (#2, @jacobhausler)
 
+[0.1.11]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.11
 [0.1.10]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.10
 [0.1.9]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.9
 [0.1.8]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.8
