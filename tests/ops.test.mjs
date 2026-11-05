@@ -683,6 +683,37 @@ const gTu = narrowView(G, gr, 'new', ops.setView(G, { unreadOnly: true }).view, 
 assert(gTu.chats.size === 2 && gTu.chats.has('u1') && gTu.chats.has('u2'), 'text query and unread filter intersect (only matching unread rows survive)')
 assert(visibleRows(gIn.get('w'), gTu).map(r => r.id).join() === 'u1', 'under text∩unread the w list shows only u1')
 
+// chatsBeneath recursion + empty-folder contract (est-uqarl, nightly sweep c):
+// a children-only folder (no sessionsIn key) yields its descendants without
+// throwing; own visible rows strictly precede child-folder rows at every depth;
+// sibling traversal follows the childFolders array insertion order; unknown or
+// empty fids return []; the view filter applies at every recursion level.
+{
+  const CA = { id: 'ca' }, CB = { id: 'cb' }, GCA = { id: 'gca' }, GCB = { id: 'gcb' }
+  const pR = [{ id: 'p1' }, { id: 'p2' }], caR = [{ id: 'ca1' }, { id: 'ca2' }]
+  const gR = [{ id: 'g1' }], gcR = [{ id: 'g2' }, { id: 'g3' }]
+  const IN = new Map([['p', pR], ['ca', caR], ['gca', gR], ['gcb', gcR]])
+  const KIDS = new Map([['p', [CA, CB]], ['ca', [GCA]], ['cb', [GCB]]])
+  assert(chatsBeneath('cb', IN, KIDS, null).map(r => r.id).join() === 'g2,g3',
+    'a children-only folder with no sessionsIn key yields its descendants, never throws')
+  assert(chatsBeneath('ghost', IN, KIDS, null).length === 0, 'an unknown fid returns []')
+  assert(chatsBeneath('ca', new Map([['ca', []]]), new Map(), null).length === 0,
+    'a folder registered with an empty row list and no children returns []')
+  assert(chatsBeneath('p', IN, KIDS, null).map(r => r.id).join() === 'p1,p2,ca1,ca2,g1,g2,g3',
+    'no filter: own rows strictly precede child-folder rows, depth-first through grandchildren')
+  assert(chatsBeneath('ca', IN, KIDS, null).map(r => r.id).join() === 'ca1,ca2,g1',
+    'the precedence lock holds at every depth, not just the root call')
+  assert(chatsBeneath('p', IN, new Map([['p', [CB, CA]], ['ca', [GCA]], ['cb', [GCB]]]), null)
+    .map(r => r.id).join() === 'p1,p2,g2,g3,ca1,ca2,g1',
+    'sibling traversal follows the childFolders array order, not folder-name or state order')
+  assert(chatsBeneath('p', IN, KIDS, { folders: new Set(), chats: new Set(['g1', 'g3']) })
+    .map(r => r.id).join() === 'g1,g3',
+    'the view applies at every level: a folder whose direct rows all filter out yields grandchild rows')
+  assert(chatsBeneath('p', IN, KIDS, { folders: new Set(), chats: new Set(['p2', 'g1']) })
+    .map(r => r.id).join() === 'p2,g1',
+    'under a partial view the visible own rows still precede the visible descendant rows')
+}
+
 // Public-repo standard (issue #18): the private security route and the issue forms.
 // Field-level checks only, run once (catalog pass). GitHub reads these files as config.
 if (!FULL) {
