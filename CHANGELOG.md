@@ -3,6 +3,11 @@
 All notable changes to this plugin. Versions follow `plugin.yaml`; each release is a
 `vX.Y.Z` tag and a catalog entry pinned to that tag's commit.
 
+## Unreleased
+
+### Tests
+- pin `chatsBeneath` recursion + empty-folder contract — sessionsIn miss, parent-before-child precedence, childFolders insertion-order DFS at depth 2, unknown fid -> [], view filter at every level (5 asserts, both builds, +5 ok → 215/239) (18dbe1d, #79, @jacobhausler)
+
 ## [0.1.11] - 2026-11-03
 
 Test-gain release: the shipped bundle is byte-identical to `v0.1.10` (`node
