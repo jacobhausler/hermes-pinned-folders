@@ -900,3 +900,54 @@ if (FULL) {
     menuChildren(MIX, KIT).map(e => e.key).join() === 'sep0,sw1,h2,m3',
     'menuChildren keys: kind-tagged and positional (sep/sw/h/m + index), identical across repeated calls')
 }
+
+
+// ── chatsBeneath recursion + empty-folder contract (both builds; est-uqarl) ──
+// Five clauses of the recursion itself, on hand-built Maps (sessionsIn: folderId ->
+// ordered rows; childFolders: folderId -> [{id}]): (1) a children-only folder has no
+// direct sessionsIn key yet returns its descendants — under a view AND under null — and
+// that keyless node adds nothing mid-recursion; (2) precedence lock: the parent's own
+// visible rows strictly precede every child folder's rows, re-checked inside the depth-2
+// subtree; (3) grandchildren are visited in childFolders.get(fid) ARRAY INSERTION ORDER:
+// [A,B] puts A's whole subtree before B's, the swapped control flips it; (4) an unknown
+// fid is [] with both Maps missing, no throw; (5) visibleRows gates at EVERY level — a
+// folder whose own rows all filter out contributes nothing while deeper rows survive,
+// and excluded rows at depth >= 1 never leak. Empty-folder here = a folder holding no
+// directly-placed chats, the shape countIn/open-all hit on any group-by-parent tree.
+{
+  const row = id => ({ id, title: 'T-' + id })
+  const ids = list => (list || []).map(x => x.id)
+  const sIn = new Map([['rt', [row('p1'), row('p2')]], ['A', [row('a1'), row('aX')]],
+    ['A1', [row('a11'), row('a1X')]], ['B', [row('b1')]], ['C', [row('c1')]]])
+  const cIn = new Map([['rt', [{ id: 'A' }, { id: 'B' }]], ['A', [{ id: 'A1' }]], ['mid', [{ id: 'C' }]]])
+  const fold = new Set(['rt', 'A', 'A1', 'B', 'C', 'mid'])
+  const V1 = { folders: fold, chats: new Set(['p1', 'p2', 'a1', 'aX', 'a11', 'a1X', 'b1', 'c1']) }
+  const V2 = { folders: fold, chats: new Set(['a1', 'b1']) }
+  const V3 = { folders: fold, chats: new Set(['p1', 'a11']) }
+  const deep = new Map([...cIn, ['rt', [{ id: 'A' }, { id: 'B' }, { id: 'mid' }]]])
+  const swap = new Map([...cIn, ['rt', [{ id: 'B' }, { id: 'A' }]]])
+  // precedence alone (exact membership, no foreign leak), so sibling order
+  // (clause 3) cannot borrow this assert's red
+  const firstBefore = (seq, own, kids) => seq.length === own.length + kids.length &&
+    seq.every(id => own.includes(id) || kids.includes(id)) &&
+    own.every(o => kids.every(k => seq.indexOf(o) < seq.indexOf(k)))
+  let errA = '', gotA = ''
+  try { gotA = ids(chatsBeneath('mid', sIn, cIn, V1)).join() + '|' + ids(chatsBeneath('mid', sIn, cIn, null)).join() +
+      '|' + ids(chatsBeneath('rt', sIn, deep, V1)).join() } catch (e) { errA = String(e && e.message) }
+  assert(!errA && gotA === 'c1|c1|p1,p2,a1,aX,a11,a1X,b1,c1',
+    'chatsBeneath sessionsIn miss: a children-only folder returns its descendants under a view and under null, no throw, and adds nothing at the keyless node mid-recursion (' + (errA || gotA) + ')')
+  assert(firstBefore(ids(chatsBeneath('rt', sIn, cIn, V1)), ['p1', 'p2'], ['a1', 'aX', 'a11', 'a1X', 'b1']) &&
+    firstBefore(ids(chatsBeneath('A', sIn, cIn, V1)), ['a1', 'aX'], ['a11', 'a1X']),
+    'chatsBeneath precedence: a parent\'s own visible rows strictly precede every child-folder row, at the root and again one level down')
+  assert(ids(chatsBeneath('rt', sIn, cIn, V1)).join() === 'p1,p2,a1,aX,a11,a1X,b1' &&
+    ids(chatsBeneath('rt', sIn, swap, V1)).join() === 'p1,p2,b1,a1,aX,a11,a1X',
+    'chatsBeneath DFS order: childFolders.get(fid) array insertion order drives the walk — [A,B] yields A\'s WHOLE subtree then B, the [B,A] control flips it')
+  let errB = '', gotB = ''
+  try { gotB = ids(chatsBeneath('zzz', sIn, cIn, V1)).length + ',' + ids(chatsBeneath('zzz', sIn, cIn, null)).length +
+      ',' + ids(chatsBeneath('C', sIn, cIn, V1)).length } catch (e) { errB = String(e && e.message) }
+  assert(!errB && gotB === '0,0,1',
+    'chatsBeneath unknown fid: [] from both Map misses, with a view and without, no throw (a leaf that has rows still returns them) (' + (errB || gotB) + ')')
+  assert(ids(chatsBeneath('rt', sIn, cIn, V2)).join() === 'a1,b1' &&
+    ids(chatsBeneath('rt', sIn, cIn, V3)).join() === 'p1,a11',
+    'chatsBeneath view at EVERY level: rt\'s own rows all filtering out contributes nothing while child rows survive (a1,b1), a depth-2-only visible row surfaces alone (p1,a11), excluded rows at depth >= 1 never leak')
+}
