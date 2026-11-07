@@ -587,6 +587,20 @@ assert(nv.chats.has('u1') && !nv.chats.has('r1') && !nv.chats.has('act') && nv.f
 nv = narrowView(V, vr, '', ops.setView(V, { status: 'working' }).view, 'default')
 assert(nv.chats.has('act') && nv.chats.size === 1 && !nv.folders.has('w'), 'status Working shows only working rows; folders with none hide')
 assert(applyView(vr, { profile: 'current' }, 'default').map(r => r.id).join() === 'r1,act', 'profile Current keeps rows of the current profile (no profile = default)')
+// applyView row-filter contract: unreadOnly/status gate independently; profile 'current'
+// normalizes BOTH sides through profileKey; invalid views pass everything through.
+const AV = [{ id: 'r' }, { id: 'u', unread: true }, { id: 'w', is_active: true }, { id: 'uw', unread: true, is_active: true }, { id: 'pk', profile: '  work  ' }, { id: 'pb', profile: '   ' }, { id: 'pn' }]
+const av = (view, cur) => applyView(AV, view, cur).map(r => r.id).join()
+assert(av({ unreadOnly: true }, 'default') === 'u,uw', 'unreadOnly drops read rows, keeps unread ones (incl. read+working)')
+assert(av({ status: 'unread' }, 'default') === 'u,uw', 'status unread gates on row.unread independently of unreadOnly')
+assert(av({ status: 'working' }, 'default') === 'w,uw', 'status working gates on row.is_active independently of unreadOnly')
+assert(av({ profile: 'current' }, 'work') === 'pk', 'profile current matches the trimmed row profile; blank/absent rows do not ride a non-default current')
+assert(av({ profile: 'current' }, '') === 'r,u,w,uw,pb,pn', 'blank current normalizes to default, so blank/absent-profile rows are kept')
+assert(av({ profile: 'current' }, '   ') === 'r,u,w,uw,pb,pn', 'whitespace-only current normalizes to default identically')
+assert(av({ status: 'nope', profile: 'sideways', order: 'up', unreadOnly: 'yes' }, 'x') === 'r,u,w,uw,pk,pb,pn', 'invalid view choices normalize to defaults and let every row through')
+assert(av('recent', 'x') === 'r,u,w,uw,pk,pb,pn', 'non-object view normalizes to defaults')
+assert(applyView(null, { unreadOnly: true }, 'default').length === 0, 'null rows yield []')
+assert(applyView(undefined, { profile: 'current' }, 'default').length === 0, 'undefined rows yield []')
 nv = narrowView(V, vr, 'unread', ops.setView(V, { profile: 'current' }).view, 'default')
 assert(nv.chats.size === 0, 'text filter and view filters combine')
 assert(narrowView(V, vr, '', ops.setView(V, { order: 'recent' }).view, 'default') === null, 'ordering alone filters nothing')
