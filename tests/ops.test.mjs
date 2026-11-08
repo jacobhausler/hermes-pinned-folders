@@ -205,6 +205,26 @@ if (FULL) {
   assert(tombstoned({ id: 't1' }, t0 + 61_000) === false, 'tombstone expires past TOMBSTONE_MS=60_000 -> row shows again')
   assert(tombstoned({ id: 'never', _lineage_root_id: 'nope' }, t0 + 30_000) === false, 'never-unpinned row is never tombstoned')
 
+  // ── tombstoned() boundary + purge-on-read (full-only; est-ngbv3). Fresh t2 unpin
+  // under a fixed Date.now stub -> recorded at-time EXACT, zero wall-clock skew
+  // (t1's tombstone was consumed by the +61s check above). Pins INCLUSIVE expiry at
+  // now - at === TOMBSTONE_MS and that the expired read purges the entry.
+  {
+    const at = 1_700_000_000_000
+    const prevWin = globalThis.window, prevNow = Date.now
+    globalThis.window = { hermesDesktop: { api: async opts => { tombPatchCalls.push(opts) } }, localStorage: { length: 0, key: () => null, getItem: () => null, setItem: () => {} } }
+    Date.now = () => at
+    try {
+      await mod.unpinPinnedRow({ id: 't2' }, { sessions: { pin: () => { throw new Error('t2 must not use the SDK pin verb') } } })
+    } finally {
+      Date.now = prevNow
+      if (prevWin) globalThis.window = prevWin; else delete globalThis.window
+    }
+    assert(tombstoned({ id: 't2' }, at + 30_000) === true, 't2 in-window')
+    assert(tombstoned({ id: 't2' }, at + 60_000) === false, 't2 boundary: now AT exactly TOMBSTONE_MS=60_000 reads false')
+    assert(tombstoned({ id: 't2' }, at + 30_000) === false, 't2 purge-on-read: after the expired read an earlier-now re-query reads false — entry deleted; pre-expiry it read true')
+  }
+
   // ── pinAndJudge seam edges (full-only). Drives the injectable seams of
   // pinAndJudge(row, pin, judge) — full/plugin.js: `await pin(row); judge(pinIdsOf(row))`;
   // pinIdsOf: `[row.id, row._lineage_root_id].filter(Boolean)` drops falsy slots. judge
