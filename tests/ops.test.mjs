@@ -357,6 +357,35 @@ if (FULL) {
 const names = t => t.folders.filter(f => !f.parent).map(f => f.name).join(',')
 let o = normalize({ folders: [{ id: 'z', name: 'Zeta', parent: null }, { id: 'a', name: 'Alpha', parent: null }, { id: 'm', name: 'Mid', parent: null }] })
 assert(names(o) === 'Alpha,Mid,Zeta', 'legacy layout sorted alphabetically once: ' + names(o))
+// ── the migration comparator itself (est-ws1bq) ──
+// normalize() sorts legacy layouts with byName = localeCompare(name, undefined,
+// { numeric: true, sensitivity: 'base' }) — full/plugin.js:474, and desktop/
+// plugin.js:458 in the catalog build. 'Alpha,Mid,Zeta' above witnesses NEITHER
+// option, so pin each: digit runs compare by value, letters by base (case- and
+// accent-insensitive). Each message carries the plain sort() of the same names:
+// drop the options object and the RED message shows the lexicographic order
+// that would have shipped. (4)'s reverse-input accent pair is the stability
+// witness — Array#sort is stable since ES2019, so base-equal names keep input
+// order; under variant sensitivity the pair is unequal and that assert flips.
+const legacyNames = arr => names(normalize({ folders: arr.map((name, i) => ({ id: 'L' + i, name, parent: null })) }))
+const plainJoin = arr => [...arr].sort().join(',')
+assert(legacyNames(['Module 10', 'Module 2', 'Module 1']) === 'Module 1,Module 2,Module 10',
+  'migration orders digit runs by value, Module 10 last (plain sort: ' + plainJoin(['Module 10', 'Module 2', 'Module 1']) + ')')
+assert(legacyNames(['B', 'a']) === 'a,B',
+  "migration compares letters base-first, 'a' before 'B' (plain sort: " + plainJoin(['B', 'a']) + ')')
+assert(legacyNames(['f9', 'f10', 'a1b', 'a10b']) === 'a1b,a10b,f9,f10',
+  'migration orders digits inside names (plain sort: ' + plainJoin(['f9', 'f10', 'a1b', 'a10b']) + ')')
+// Zulu closes every accent input so the preserved pair proves the order
+// survived a real sort pass, not a no-op append.
+assert(legacyNames(['A', 'Á', 'Zulu']) === 'A,Á,Zulu',
+  'base-equal accent pair keeps input order (A,Á as saved), Zulu still last')
+assert(legacyNames(['Á', 'A', 'Zulu']) === 'Á,A,Zulu',
+  'same pair saved (Á,A) keeps THAT order — comparator returns 0, never reorders, Zulu still last')
+// The comparator governs the ONE-TIME migration only: a layout already carrying
+// foldersOrdered reloads in saved order even when that order contradicts what
+// the numeric comparator would emit (Module 10 saved before Module 2).
+assert(names(normalize({ folders: [{ id: 'M10', name: 'Module 10', parent: null }, { id: 'M2', name: 'Module 2', parent: null }], foldersOrdered: true })) === 'Module 10,Module 2',
+  'foldersOrdered reloads unsorted: the comparator never touches a saved custom order')
 o = ops.placeFolder(o, 'z', 'a', 'before')
 assert(names(o) === 'Zeta,Alpha,Mid', 'drag Zeta above Alpha: ' + names(o))
 assert(names(normalize(JSON.parse(JSON.stringify(o)))) === 'Zeta,Alpha,Mid', 'custom order survives save/reload (no re-sort)')
