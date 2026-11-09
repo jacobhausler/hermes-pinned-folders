@@ -389,6 +389,24 @@ assert(names(normalize({ folders: [{ id: 'M10', name: 'Module 10', parent: null 
 o = ops.placeFolder(o, 'z', 'a', 'before')
 assert(names(o) === 'Zeta,Alpha,Mid', 'drag Zeta above Alpha: ' + names(o))
 assert(names(normalize(JSON.parse(JSON.stringify(o)))) === 'Zeta,Alpha,Mid', 'custom order survives save/reload (no re-sort)')
+
+// ── migration comparator, delta over the witnesses above ──
+// (1)-(4) are pinned above; these close the remaining gaps: the flag itself,
+// option-differential control asserts (an options object reduced to `{}` or
+// `{ sensitivity:'variants' }` passes every equality pin above), post-migration
+// ops never re-sort, and both builds carrying the options verbatim.
+const migLayout = (...ns) => normalize({ folders: ns.map((name, i) => ({ id: 'X' + i, name, parent: null })), foldersOrdered: false })
+assert(migLayout('Module 1').foldersOrdered === true, 'migration records foldersOrdered:true, the sort never runs again')
+assert(['Module 10', 'Module 2', 'Module 1'].sort().join(',') !== names(migLayout('Module 10', 'Module 2', 'Module 1')) && ['B', 'a'].sort().join(',') !== names(migLayout('B', 'a')) && ['f9', 'f10', 'a1b', 'a10b'].sort().join(',') !== names(migLayout('f9', 'f10', 'a1b', 'a10b')),
+  'plain sort() orders all three arrays differently, so dropping either option cannot leave the pins above green: ' + [['Module 10', 'Module 2', 'Module 1'], ['B', 'a'], ['f9', 'f10', 'a1b', 'a10b']].map(ns => ns.sort().join(',')).join(' | '))
+const grown0 = ops.addFolder(migLayout('Module 10', 'Module 2', 'Module 1'), null, 'Module 0', 'x')
+assert(names(ops.rename(grown0, 'x', 'Module 3')) === 'Module 1,Module 2,Module 10,Module 3', 'addFolder/rename after migration appends, no re-sort: ' + names(ops.rename(grown0, 'x', 'Module 3')))
+if (FULL) {
+  const OPTS = "a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })"
+  assert(['full/plugin.js', 'desktop/plugin.js'].every(pp => readFileSync(new URL('../' + pp, import.meta.url), 'utf8').includes(OPTS)),
+    'both builds carry the byName options object verbatim')
+}
+
 // A hand-edited or half-written save can carry an entry with no name: the
 // one-time alphabetical sort reads .name, so a nameless entry must be dropped,
 // not crash the pane on load (same shape importLayout already refuses).
