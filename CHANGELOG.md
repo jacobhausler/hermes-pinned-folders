@@ -6,7 +6,7 @@ All notable changes to this plugin. Versions follow `plugin.yaml`; each release 
 ## Unreleased
 
 ### Tests
-- pin `normalize()`'s one-time migration comparator — numeric digit runs (`Module 1,Module 2,Module 10`), base-first case folding (`a` before `B`), mixed-digit names (`a1b,a10b,f9,f10`), stable base-equal accent pair in both input orders, `foldersOrdered:true` reloads unsorted on numeric names, plain-`sort()` mutation bite in every message (6 asserts, both builds, +6 ok → 234/261) (c70dd11, #PENDING, @jacobhausler)
+- pin `normalize()`'s one-time migration comparator — numeric digit runs (`Module 1,Module 2,Module 10`), base-first case folding (`a` before `B`), mixed-digit names (`a1b,a10b,f9,f10`), stable base-equal accent pair in both input orders, `foldersOrdered:true` reloads unsorted on numeric names, plain-`sort()` mutation bite in every message (6 asserts, both builds, +6 ok → 234/261) (c70dd11, #83, @jacobhausler)
 
 ## [0.1.12] - 2026-11-08
 
