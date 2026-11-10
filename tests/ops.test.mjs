@@ -745,8 +745,9 @@ for (const [combo, item] of caCombos)
   const caFresh = collapseAllItem({ filtering: true, empty: false, collapse: caPassed })
   caFresh.onSelect()
   assert(caFresh.onSelect !== caPassed && caFresh.onSelect !== caEmptyFn
-    && caOnEmpty.onSelect !== caEmptyFn && caSaw === 0,
-    'filtered collapse-all onSelect is a fresh no-op closure, never the passed collapse')
+    && caOnEmpty.onSelect !== caEmptyFn && caSaw === 0
+    && caFresh.onSelect !== caOnEmpty.onSelect,
+    'filtered collapse-all onSelect is a fresh no-op closure per call, never the passed collapse')
 }
 let G = ops.addFolder(ops.addFolder(normalize(null), null, 'W', 'w'), 'w', 'Sub', 'sub')
 for (const [sid, f] of [['r1', 'w'], ['u1', 'w'], ['u2', 'sub'], ['r2', 'sub']]) G = ops.placeSession(G, sid, f)
