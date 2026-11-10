@@ -725,6 +725,30 @@ assert(caEmpty.disabled === true && caEmpty.label === 'Collapse all' && caEmpty.
 const caOnEmpty = collapseAllItem({ filtering: true, empty: true, collapse: () => collapsed++ })
 caOnEmpty.onSelect()
 assert(caOnEmpty.disabled === true && collapsed === 2, 'filtered collapse-all onSelect is a hard no-op (counter unchanged) even when empty:true')
+// est-m7cfk (nightly pass): the menu renders exactly label/icon/disabled/onSelect,
+// so pin the whole item shape on every combo — a silent icon rename or key drift
+// breaks the menu with zero signal today — and pin that the filtered branch hands
+// the menu a FRESH no-op closure rather than the passed collapse (the counter pins
+// above cannot tell a fresh no-op from a collapse that merely never fired).
+const caCombos = [
+  ['unfiltered', caOff], ['filtered', caOn],
+  ['unfiltered+empty', caEmpty], ['filtered+empty', caOnEmpty],
+]
+for (const [combo, item] of caCombos)
+  assert(item.icon === 'collapse-all', `collapse-all pins its icon literal (${combo})`)
+for (const [combo, item] of caCombos)
+  assert(Object.keys(item).join(',') === 'label,icon,disabled,onSelect',
+    `collapse-all pins its exact key set label,icon,disabled,onSelect (${combo})`)
+{
+  let caSaw = 0
+  const caPassed = () => { caSaw++ }
+  const caFresh = collapseAllItem({ filtering: true, empty: false, collapse: caPassed })
+  caFresh.onSelect()
+  assert(caFresh.onSelect !== caPassed && caFresh.onSelect !== caEmptyFn
+    && caOnEmpty.onSelect !== caEmptyFn && caSaw === 0
+    && caFresh.onSelect !== caOnEmpty.onSelect,
+    'filtered collapse-all onSelect is a fresh no-op closure per call, never the passed collapse')
+}
 let G = ops.addFolder(ops.addFolder(normalize(null), null, 'W', 'w'), 'w', 'Sub', 'sub')
 for (const [sid, f] of [['r1', 'w'], ['u1', 'w'], ['u2', 'sub'], ['r2', 'sub']]) G = ops.placeSession(G, sid, f)
 const gr = [{ id: 'r1', title: 'read' }, { id: 'u1', title: 'new', unread: true }, { id: 'u2', title: 'news', unread: true }, { id: 'r2', title: 'old' }]
