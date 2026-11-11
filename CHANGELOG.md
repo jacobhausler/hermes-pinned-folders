@@ -5,7 +5,15 @@ All notable changes to this plugin. Versions follow `plugin.yaml`; each release 
 
 ## Unreleased
 
+## [0.1.13] - 2026-11-11
+
+Test-gain release: the shipped bundle is byte-identical to `v0.1.12` (`node
+scripts/build.mjs` rebuild is byte-identical at this head; `desktop/plugin.js`
+and `full/plugin.js` unchanged). No behavior change. Gates at this release:
+suite 246 ok catalog / 274 ok full, 0 failures, `hermes plugins validate` clean.
+
 ### Tests
+- pin `tombstoned()` expiry-boundary inclusivity + lazy purge-on-read — boundary-at-expiry tombstone survives read then is purged on next access; pre-expiry kept; post-expiry dropped (3 asserts, full-only, +3 ok → 228/255) (06b9596, #82, @jacobhausler)
 - pin `normalize()`'s one-time migration comparator — numeric digit runs (`Module 1,Module 2,Module 10`), base-first case folding (`a` before `B`), mixed-digit names (`a1b,a10b,f9,f10`), stable base-equal accent pair in both input orders, `foldersOrdered:true` reloads unsorted on numeric names, plain-`sort()` mutation bite in every message (6 asserts, both builds, +6 ok → 234/261) (c70dd11, #83, @jacobhausler)
 - migration-comparator delta pins over #83 — `foldersOrdered:true` lands on load, plain-`sort()` differential witnesses (an options object reduced to `{}` cannot keep the equality pins green), addFolder/rename append without re-sort, both builds carry the options verbatim (3+1 asserts → 237/265)
 - pin `collapseAllItem`'s menu-shape contract — icon literal `collapse-all` on both branches, exact key set `label,icon,disabled,onSelect` across all four input combos, filtered-branch `onSelect` is a fresh no-op closure not the passed collapse (identity pin over the est-om14c counter pins) (9 asserts, both builds, +9 ok → 246/274)
@@ -195,6 +203,7 @@ which uses only the SDK.
 - repo-admin standard: path-scoped CI `gates` check, CONTRIBUTING with the review
   checklist, PR template (#2, @jacobhausler)
 
+[0.1.13]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.13
 [0.1.12]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.12
 [0.1.11]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.11
 [0.1.10]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.10
