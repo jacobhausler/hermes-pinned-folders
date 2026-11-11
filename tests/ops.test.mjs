@@ -917,6 +917,85 @@ if (FULL) {
     'sdk-contract OK line carries the checkout short HEAD (' + head + '), not a fixed label')
   rmSync(dir, { recursive: true, force: true })
 }
+// --- sdk-contract host-surface legs: every `host.<path>` (depth <=2, `?.`
+// normalized) the repo's OWN full/plugin.js dereferences must resolve against
+// the checkout's `export const host = {` literal: depth-1 `key:` entries and
+// bare shorthand entries, ONE inline nested object read via its depth-1 keys,
+// and ONE named-reference hop (`sessions: sessionsHost` -> the relative
+// import -> `export const sessionsHost = {` there). Comments are blanked
+// before key scanning, so a `, word,` inside a note cannot fake an entry.
+// These legs use explicit declarations (no star export): the import gate
+// above proves the `export * from` trust shape, and the same trust rule
+// applies to the host surface.
+{
+  const dir = mkdtempSync(join(tmpdir(), 'pf-sdkhost-'))
+  const failFixture = (what) => { console.error('FAIL sdk-contract host fixture: ' + what); process.exit(1) }
+  const sdkDir = join(dir, 'apps/desktop/src/sdk')
+  mkdirSync(sdkDir, { recursive: true })
+  const script = fileURLToPath(new URL('../scripts/sdk-contract.mjs', import.meta.url))
+  const read = p => readFileSync(new URL(p, import.meta.url), 'utf8')
+  const git = (...a) => spawnSync('git', ['-C', dir, ...a], { encoding: 'utf8', env: { ...process.env, HOME: dir, GIT_CONFIG_NOSYSTEM: '1' } })
+  const run = () => spawnSync('node', [script, dir],
+    { encoding: 'utf8', env: { ...process.env, GIT_CEILING_DIRECTORIES: tmpdir() } })
+  // Same extractor shapes as the script: a new import or a new host deref in
+  // the source turns these legs red until the fixtures carry it — the gate
+  // refusing to under-read its own ground truth. `host` is excluded from the
+  // declarations: every leg's host literal IS its declaration.
+  const importNames = [...new Set(
+    [...read('../desktop/plugin.js').matchAll(/import\s*\{([^}]*)\}\s*from\s*'([^']+)'/g)]
+      .filter(m => m[2] === '@hermes/plugin-sdk')
+      .flatMap(m => m[1].split(','))
+      .map(x => x.trim().replace(/^type\s+/, '').split(/\s+as\s+/)[0].trim())
+      .filter(Boolean))]
+  const hostPaths = [...new Set([...read('../full/plugin.js').matchAll(
+    /(?<![\w$.])host\.([A-Za-z_$][\w$]*)(?:\??\.([A-Za-z_$][\w$]*))?/g)]
+    .map(m => m[2] ? m[1] + '.' + m[2] : m[1]))]
+  assert(hostPaths.length === 9 && hostPaths.includes('sessions.pin') && hostPaths.includes('activeConnectionId'),
+    'sdk-contract host fixture mirrors the source: full/plugin.js dereferences exactly the 9 paths the legs below carry')
+  const decls = importNames.filter(n => n !== 'host').map(n => 'export const ' + n + ' = {}\n').join('')
+  if (git('init', '-q').status !== 0) failFixture('init')
+  const keyNotifies = 'notify: () => {},\n  notifyError: () => {},'
+  const shortNotifies = 'notify,\n  notifyError,'
+  const keyState = 'state: { connectionId: {}, focusedStoredSessionId: {}, profile: {} },'
+  const inlineState = 'state: { connectionId, focusedStoredSessionId, profile },'
+  const inlineSessions = 'sessions: { pin: async () => {} },'
+  const hopImport = "import { sessionsHost } from './sessions'\n"
+  const body = (notifies, state, sessions) => 'export const host = {\n' +
+    '  activeConnectionId: () => null,\n' +
+    '  listPersistedSessions: async () => [],\n' +
+    '  request: async () => ({}),\n' +
+    '  ' + notifies + '\n  ' + sessions + '\n  ' + state + '\n}\n'
+  const surface = (notifies, state, sessions, hop) => (hop ? hopImport : '') + decls + body(notifies, state, sessions)
+  const okLine = h => 'sdk-contract: OK (' + importNames.length + ' imports + ' + hostPaths.length + ' host paths resolved at ' + h + ')'
+  const leg = (label, indexText, sessionsText) => {
+    writeFileSync(join(sdkDir, 'index.ts'), indexText)
+    const ts = join(sdkDir, 'sessions.ts')
+    if (sessionsText) writeFileSync(ts, sessionsText); else try { rmSync(ts) } catch {}
+    if (git('add', '-A').status !== 0) failFixture('add ' + label)
+    if (git('-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false', 'commit', '-q', '-m', label).status !== 0) failFixture('commit ' + label)
+    const head = git('rev-parse', '--short', 'HEAD').stdout.trim()
+    return { r: run(), head, label }
+  }
+  const positive = (label, indexText, sessionsText) => {
+    const { r, head } = leg(label, indexText, sessionsText)
+    assert(r.status === 0, 'sdk-contract host ' + label + ': exit 0 when the whole host surface resolves (stdout: ' + r.stdout.trim().split('\n').pop() + ' stderr: ' + r.stderr.trim() + ')')
+    assert(r.stdout.includes(okLine(head)), 'sdk-contract host ' + label + ': combined OK line ' + JSON.stringify(okLine(head)))
+    assert(r.stdout.includes('resolved at ' + head), 'sdk-contract host ' + label + ': head substring survives the combined line')
+  }
+  positive('key-form', surface(keyNotifies, keyState, inlineSessions))
+  positive('shorthand', surface(shortNotifies, keyState, inlineSessions))
+  positive('inline-state', surface(keyNotifies, inlineState, inlineSessions))
+  positive('named-hop', surface(keyNotifies, keyState, 'sessions: sessionsHost,', true),
+    'export const sessionsHost = {\n  pin: async () => {},\n}\n')
+  const neg = leg('hop-missing-pin', surface(keyNotifies, keyState, 'sessions: sessionsHost,', true),
+    'export const sessionsHost = {\n  unpin: async () => {},\n}\n')
+  assert(neg.r.status === 1, 'sdk-contract host negative: exit 1 when the hop target dropped a dereferenced key')
+  assert(neg.r.stdout.includes('host-drift: MISSING sessions.pin'),
+    'sdk-contract host negative: names the exact path as `host-drift: MISSING sessions.pin`')
+  assert((neg.r.stdout.match(/^host-drift: MISSING /gm) || []).length === 1,
+    'sdk-contract host negative: exactly one drift line — the other 8 paths resolved through the same fixture')
+  rmSync(dir, { recursive: true, force: true })
+}
 // ── unpinAndReconcile pacing contract via injected seams (both builds; est-u4zo4) ──
 // Pins the reconcile pacing: refresh never exceeds the reads budget; sleep fires
 // exactly once between reads (never before the first) with the injected gapMs;
