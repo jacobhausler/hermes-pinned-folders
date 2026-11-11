@@ -11,7 +11,7 @@ Start here if you are an agent working on this repo. The plugin is two files bui
 | `scripts/build.mjs` | Writes `desktop/plugin.js` by deleting every `// #full` … `// #end` block. |
 | `tests/ops.test.mjs` | Tests the pure functions in either build; the catalog pass also checks `SECURITY.md` and the issue templates. |
 | `tests/build.test.mjs` | Tests the `strip()` parser that produces the catalog build, incl. a live canary: `strip(full/plugin.js)` must equal `desktop/plugin.js` byte-for-byte. |
-| `scripts/sdk-contract.mjs` | Gate: every `@hermes/plugin-sdk` import in the catalog build must exist in a hermes-agent checkout's `apps/desktop/src/sdk/index.ts` (CI runs it at `HERMES_PIN`). |
+| `scripts/sdk-contract.mjs` | Gate: every `@hermes/plugin-sdk` import in the catalog build must exist in a hermes-agent checkout's `apps/desktop/src/sdk/index.ts`, and every `host.*` path the full source dereferences must resolve against that checkout's `host` object (CI runs it at `HERMES_PIN`). |
 | `plugin.yaml` | Manifest: name, version, description. |
 | `docs/*.png` | README screenshots. `catalog-*.png` show the catalog build. |
 
@@ -22,9 +22,9 @@ Node 22 or newer. Nothing to install.
 ```sh
 node scripts/build.mjs          # → built desktop/plugin.js
 node tests/build.test.mjs    # strip() parser → 10 "ok" lines, exit 0
-node tests/ops.test.mjs         # catalog build → 246 "ok" lines, exit 0
-node tests/ops.test.mjs full    # full build   → 274 "ok" lines, exit 0
-node scripts/sdk-contract.mjs /tmp/hermes-agent  # → "sdk-contract: OK (28 imports resolved at <short-HEAD-of-checkout>)", exit 0; CI checks the checkout out at HERMES_PIN first (see .github/workflows/ci.yml), so the printed ref must equal the pin's
+node tests/ops.test.mjs         # catalog build → 262 "ok" lines, exit 0
+node tests/ops.test.mjs full    # full build   → 290 "ok" lines, exit 0
+node scripts/sdk-contract.mjs /tmp/hermes-agent  # → "sdk-contract: OK (28 imports + 9 host paths resolved at <short-HEAD-of-checkout>)", exit 0; CI checks the checkout out at HERMES_PIN first (see .github/workflows/ci.yml), so the printed ref must equal the pin's
 hermes plugins validate .       # → "Validation passed." (catalog admission; not an SDK-only proof)
 ```
 

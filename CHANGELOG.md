@@ -5,6 +5,9 @@ All notable changes to this plugin. Versions follow `plugin.yaml`; each release 
 
 ## Unreleased
 
+### Gates
+- sdk-contract now resolves every `host.<path>` full/plugin.js dereferences (9 at main tip; depth-1 `key:`, bare shorthand, ONE inline nested object, ONE named-reference hop through the relative import; comments blanked before key scanning; plain `export * from` trusts the surface) against the checkout's `host` literal — miss prints `host-drift: MISSING <path>`, exit 1; five fake-checkout legs pin the four shapes plus the negative hop, every positive fixture carries the whole surface (16 asserts, both builds, +16 ok → 262/290) (6701924, #87, @jacobhausler)
+
 ## [0.1.13] - 2026-11-11
 
 Test-gain release: the shipped bundle is byte-identical to `v0.1.12` (`node
