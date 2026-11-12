@@ -8,6 +8,9 @@ All notable changes to this plugin. Versions follow `plugin.yaml`; each release 
 ### Gates
 - sdk-contract now resolves every `host.<path>` full/plugin.js dereferences (9 at main tip; depth-1 `key:`, bare shorthand, ONE inline nested object, ONE named-reference hop through the relative import; comments blanked before key scanning; plain `export * from` trusts the surface) against the checkout's `host` literal — miss prints `host-drift: MISSING <path>`, exit 1; five fake-checkout legs pin the four shapes plus the negative hop, every positive fixture carries the whole surface (16 asserts, both builds, +16 ok → 262/290) (6701924, #87, @jacobhausler)
 
+### Tests
+- pin `ops.moveFolder` reparent semantics + `ops.collapseAll` preservation — valid reparent (moved node's parent rewritten, moved folder goes last, subtree travels), destination collapsed key cleared and unrelated keys kept, `undefined` parent normalizes to null JSON round-trip stable, unknown id returns a byte-equal state, collapse-all passes folders/placed/order/view through, collapses every id plus `__unsorted`, idempotent, stale collapsed keys survive the spread (11 asserts, both builds, +11 ok → 273/301) (6dc950b, #88, @jacobhausler)
+
 ## [0.1.13] - 2026-11-11
 
 Test-gain release: the shipped bundle is byte-identical to `v0.1.12` (`node
