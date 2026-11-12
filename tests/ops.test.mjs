@@ -705,6 +705,41 @@ assert(JSON.stringify(ops.toggle(normalize(null), 'ghost').collapsed) === '{"gho
   assert(kid.folders.some(f => f.id === 'k' && f.parent === 'r') && !('r' in kid.collapsed),
     'addFolder into a collapsed parent clears the parent collapsed key')
 }
+// ── moveFolder reparent + collapseAll preservation (est-t7fds, 11-12) ──
+{
+  let mf = ops.addFolder(normalize(null), undefined, 'Top', 't')
+  mf = ops.addFolder(mf, 't', 'Kid', 'kid')
+  mf = ops.addFolder(mf, 'kid', 'Gk', 'gk')
+  mf = ops.addFolder(mf, undefined, 'Unrelated', 'u')
+  const moved = ops.moveFolder(mf, 't', 'u')
+  assert(moved.folders.find(f => f.id === 't').parent === 'u',
+    "moveFolder: a valid reparent rewrites only the moved node's parent")
+  assert(moved.folders.at(-1).id === 't',
+    'moveFolder: a moved folder lands last in the folders array (array order is sibling order)')
+  assert(isDescendant(moved, 'kid', 't') && isDescendant(moved, 'gk', 't'),
+    'moveFolder: the whole subtree travels with the moved folder')
+  const clearing = ops.moveFolder({ ...mf, collapsed: { u: true, keep: true } }, 't', 'u')
+  assert(!('u' in clearing.collapsed) && clearing.collapsed.keep === true,
+    'moveFolder: clears the destination collapsed key and keeps unrelated collapsed keys')
+  const topped = ops.moveFolder(moved, 't', undefined)
+  assert(topped.folders.find(f => f.id === 't').parent === null,
+    'moveFolder: an undefined parent normalizes to top level (the deserialized-menu path)')
+  assert(JSON.stringify(JSON.parse(JSON.stringify(topped))) === JSON.stringify(topped),
+    'moveFolder: the top-level reparent result is JSON round-trip stable')
+  assert(JSON.stringify(ops.moveFolder(mf, 'ghost', 'u')) === JSON.stringify(mf),
+    'moveFolder: an unknown id returns a JSON-byte-equal state (no mutation, no appended ghost)')
+  const tv = ops.setView(ops.placeSession(mf, 's1', 't'), { order: 'recent' })
+  const ca = ops.collapseAll(tv)
+  assert(JSON.stringify({ ...ca, collapsed: 0 }) === JSON.stringify({ ...tv, collapsed: 0 }),
+    'collapseAll: folders, placed, order, foldersOrdered and the non-default view pass through untouched')
+  assert(tv.folders.every(f => ca.collapsed[f.id] === true) && ca.collapsed.__unsorted === true,
+    'collapseAll: every folder id plus __unsorted collapse on a tree with placed rows and a non-default view')
+  assert(JSON.stringify(ops.collapseAll(ca)) === JSON.stringify(ca),
+    'collapseAll: running collapseAll again is a byte-equal no-op')
+  const ghosted = ops.collapseAll({ ...tv, collapsed: { gone: true } })
+  assert(ghosted.collapsed.gone === true,
+    'collapseAll: a stale collapsed key of a deleted folder survives the spread')
+}
 
 // ── #13 review: Collapse all under a filter (F1), Open all = visible rows (F2) ──
 const { collapseAllItem, chatsBeneath, visibleRows } = mod
