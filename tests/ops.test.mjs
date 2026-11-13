@@ -741,6 +741,63 @@ assert(JSON.stringify(ops.toggle(normalize(null), 'ghost').collapsed) === '{"gho
     'collapseAll: a stale collapsed key of a deleted folder survives the spread')
 }
 
+// ── deleteFolder reparent-uplift + root placement drop (est-0y63n, 11-13) ──
+// The warm-up above (add 3 deep / delete b / delete c / delete a) witnesses child-lift,
+// chat-lift and an emptied placed map only in passing; this block pins the full
+// contract: a mid-tree delete re-parents child folders AND placed sessions one hop to
+// the deleted folder's parent, the doomed folder's collapsed key is cleared while
+// unrelated keys survive, a root-level delete drops placed keys outright (never a
+// null-valued entry), an unknown id returns the input identity, a second delete of a
+// gone id is byte-equal, and the view, names and colors ride through untouched. No
+// FULL branch — both builds run the same 15 asserts.
+{
+  let df = ops.addFolder(normalize(null), undefined, 'Top', 'dt')
+  df = ops.addFolder(df, 'dt', 'Mid', 'dm')
+  df = ops.addFolder(df, 'dm', 'Leaf', 'dl')
+  df = ops.addFolder(df, 'dm', 'Gk', 'dg')
+  df = ops.addFolder(df, 'dt', 'Sibling', 'ds')
+  df = ops.addFolder(df, undefined, 'Unrelated', 'du')
+  df = ops.placeSession(ops.placeSession(df, 's1', 'dm'), 's2', 'dm')
+  df = ops.placeSession(df, 's3', 'dt')
+  df = ops.placeSession(df, 's4', 'dg')
+  df = ops.setColor(df, 'dl', 'hsl(10 60% 50%)')
+  const dfv = ops.setView(df, { order: 'recent', unreadOnly: true })
+  const doomed = ops.toggle(ops.toggle(ops.toggle(dfv, 'dm'), 'du'), 'ds')
+  const mid = ops.deleteFolder(doomed, 'dm')
+  assert(!mid.folders.some(f => f.id === 'dm') && mid.folders.find(f => f.id === 'dl').parent === 'dt' && mid.folders.find(f => f.id === 'dg').parent === 'dt',
+    'deleteFolder: a mid-tree delete lifts BOTH child folders one hop up to the deleted folder parent and drops the folder itself')
+  assert(mid.folders.map(f => f.id).join() === 'dt,dl,dg,ds,du',
+    'deleteFolder: the folders array keeps its order with only the gone slot removed')
+  assert(mid.placed.s1 === 'dt' && mid.placed.s2 === 'dt',
+    'deleteFolder: placed sessions of the gone folder reparent one hop to its parent')
+  assert(mid.placed.s3 === 'dt' && mid.placed.s4 === 'dg',
+    'deleteFolder: placements of untouched folders keep their folder id unchanged')
+  assert(!('dm' in mid.collapsed),
+    'deleteFolder: the collapsed key of the gone folder is cleared')
+  assert(mid.collapsed.du === true && mid.collapsed.ds === true,
+    'deleteFolder: unrelated collapsed keys survive (du and ds stay collapsed)')
+  assert(JSON.stringify(mid.view) === JSON.stringify(doomed.view),
+    'deleteFolder: a non-default view passes through byte-identical')
+  assert(mid.folders.find(f => f.id === 'dl').name === 'Leaf' && mid.folders.find(f => f.id === 'dl').color === 'hsl(10 60% 50%)',
+    'deleteFolder: a reparented child folder keeps its name and color through the lift')
+  assert(JSON.stringify({ ...mid, folders: 0, placed: 0, collapsed: 0 }) === JSON.stringify({ ...doomed, folders: 0, placed: 0, collapsed: 0 }),
+    'deleteFolder: every untouched slot (order, foldersOrdered, view) passes through byte-identical')
+  const again = ops.deleteFolder(mid, 'dm')
+  assert(JSON.stringify(again) === JSON.stringify(mid),
+    'deleteFolder: a second delete of an already-gone id is a JSON-byte-equal no-op')
+  assert(ops.deleteFolder(again, 'ghost') === again,
+    'deleteFolder: an unknown id returns the input identity (===, no copy, no mutation)')
+  const rootDel = ops.deleteFolder(mid, 'dt')
+  assert(!('s1' in rootDel.placed) && !('s2' in rootDel.placed) && !('s3' in rootDel.placed),
+    'deleteFolder: a root-level delete drops placed keys outright (the Unsorted fallback deletes, never stores null)')
+  assert(Object.keys(rootDel.placed).join() === 's4' && Object.values(rootDel.placed).every(v => v != null),
+    'deleteFolder: no null-valued placement entries — only the untouched s4@dg survives')
+  assert(['dl', 'dg', 'ds'].every(fid => rootDel.folders.find(f => f.id === fid).parent === null),
+    'deleteFolder: child folders of the deleted root folder become top level')
+  assert(JSON.stringify(JSON.parse(JSON.stringify(rootDel))) === JSON.stringify(rootDel),
+    'deleteFolder: the root-lifted result is JSON round-trip stable (parent null, never undefined)')
+}
+
 // ── #13 review: Collapse all under a filter (F1), Open all = visible rows (F2) ──
 const { collapseAllItem, chatsBeneath, visibleRows } = mod
 let collapsed = 0
