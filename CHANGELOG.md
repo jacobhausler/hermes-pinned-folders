@@ -10,6 +10,7 @@ All notable changes to this plugin. Versions follow `plugin.yaml`; each release 
 
 ### Tests
 - pin `ops.moveFolder` reparent semantics + `ops.collapseAll` preservation — valid reparent (moved node's parent rewritten, moved folder goes last, subtree travels), destination collapsed key cleared and unrelated keys kept, `undefined` parent normalizes to null JSON round-trip stable, unknown id returns a byte-equal state, collapse-all passes folders/placed/order/view through, collapses every id plus `__unsorted`, idempotent, stale collapsed keys survive the spread (11 asserts, both builds, +11 ok → 273/301) (6dc950b, #88, @jacobhausler)
+- pin `ops.deleteFolder` reparent-uplift contract — middle delete lifts the child one hop to the deleted folder's parent (not root) and lifts its chats the same way, survivor subfolder keeps its placement (the lift loop rewrites only `fid === id`; the wake-line's `'a'` was wrong, measured `'c'` at 5835eea), top-level delete DROPS the placed key — never a null value, JSON round-trip stable, unknown id returns the exact same object (strict identity, `:126` early return), idempotent re-delete, view deep-equal and untouched folders by-reference passthrough (13 asserts, both builds, +13 ok → 286/314) (ffabf5b, #90, @jacobhausler)
 
 ## [0.1.13] - 2026-11-11
 
