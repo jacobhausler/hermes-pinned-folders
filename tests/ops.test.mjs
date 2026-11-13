@@ -741,6 +741,57 @@ assert(JSON.stringify(ops.toggle(normalize(null), 'ghost').collapsed) === '{"gho
     'collapseAll: a stale collapsed key of a deleted folder survives the spread')
 }
 
+// ── deleteFolder reparent-uplift contract (est-0y63n, 11-13) ──
+// Five clauses, one block: a middle delete lifts its child one hop to the
+// deleted folder's parent (NOT to root) and lifts the deleted folder's own
+// chats the same way, while a survivor subfolder keeps its placement untouched
+// (the lift loop rewrites only fid === id); a top-level delete DROPS the
+// placed key instead of writing null; unknown ids and re-deletes early-return
+// the exact same object; spread+map passthrough leaves view and every
+// unrelated folder field byte-identical. Fixture via ops only, fresh ids;
+// the warm-up t at the top of the file stays untouched.
+{
+  let df = ops.addFolder(normalize(null), null, 'A', 'a')
+  df = ops.addFolder(df, 'a', 'B', 'b')
+  df = ops.addFolder(df, 'b', 'C', 'c')
+  df = ops.placeSession(df, 's_b', 'b')
+  df = ops.placeSession(df, 's_c', 'c')
+  df = { ...df, collapsed: { a: true, b: true, c: true } }
+  const out = ops.deleteFolder(df, 'b')
+  assert(out.folders.find(f => f.id === 'c').parent === 'a',
+    "deleteFolder: the survivor subfolder lifts exactly one hop, to the deleted folder's parent — not to root")
+  assert(out.placed.s_b === 'a',
+    'deleteFolder: chats of the DELETED folder lift to its parent')
+  assert(out.placed.s_c === 'c',
+    'deleteFolder: a surviving subfolder keeps its own placement (the lift loop rewrites only fid === id)')
+  assert(!out.folders.find(f => f.id === 'b'),
+    'deleteFolder: no folder with the deleted id remains')
+  assert(!('b' in out.collapsed) && out.collapsed.a === true && out.collapsed.c === true,
+    "deleteFolder: collapsed loses the deleted key and keeps every other folder's key")
+  let tp = ops.addFolder(normalize(null), null, 'Drop', 'd')
+  tp = ops.addFolder(tp, null, 'Keep', 'k')
+  tp = ops.placeSession(tp, 's', 'd')
+  tp = ops.placeSession(tp, 's2', 'k')
+  const out2 = ops.deleteFolder(tp, 'd')
+  assert(!('s' in out2.placed),
+    'deleteFolder: dropping a top-level folder deletes the key of its chat (never a null placement)')
+  assert(out2.placed.s2 === 'k' && !Object.values(out2.placed).includes(null),
+    'deleteFolder: no null ever lands in placed values; unrelated placements survive')
+  assert(JSON.stringify(JSON.parse(JSON.stringify(out2))) === JSON.stringify(out2),
+    'deleteFolder: the top-level delete result is JSON round-trip stable')
+  assert(ops.deleteFolder(out, 'ghost') === out,
+    'deleteFolder: an unknown id returns the exact same object (strict identity, early return)')
+  assert(JSON.stringify(ops.deleteFolder(out, 'b')) === JSON.stringify(out),
+    'deleteFolder: deleting an already-deleted id is a byte-equal no-op (second call hits the unknown-id early return)')
+  assert(JSON.stringify(out.view) === JSON.stringify(df.view),
+    'deleteFolder: the view passes through deep-equal')
+  assert(out.folders.find(f => f.id === 'a') === df.folders.find(f => f.id === 'a'),
+    'deleteFolder: an untouched folder object passes through by reference (spread+map reuse)')
+  const pairs = ['a', 'c'].map(i => [out.folders.find(f => f.id === i), df.folders.find(f => f.id === i)])
+  assert(pairs.every(([now, before]) => now.name === before.name && (now.color ?? null) === (before.color ?? null)),
+    'deleteFolder: surviving folders keep name and color deep-equal; only parent is rewritten')
+}
+
 // ── #13 review: Collapse all under a filter (F1), Open all = visible rows (F2) ──
 const { collapseAllItem, chatsBeneath, visibleRows } = mod
 let collapsed = 0
