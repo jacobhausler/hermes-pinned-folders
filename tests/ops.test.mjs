@@ -798,6 +798,104 @@ assert(JSON.stringify(ops.toggle(normalize(null), 'ghost').collapsed) === '{"gho
     'deleteFolder: the root-lifted result is JSON round-trip stable (parent null, never undefined)')
 }
 
+// ── folderActivity badge aggregation (est-bfokq, nightly sweep 11-14) ────────
+// The two pure exports feeding the COLLAPSED-folder badges and the per-folder
+// row order sit at zero asserts while every sibling is pinned. This block pins
+// the full contract: flag combination per folder (unread counts, active is a
+// latch), ancestor-chain propagation at every hop, folders holding only one
+// flag kind, and the three skip classes — flagless rows, Unsorted rows, and
+// placements pointing at gone folders — that must add NO entry. Plus the
+// rows-null guard, the empty tree, the forged-cycle termination (est-vssmr
+// family, at the activity level), and the exact entry shape. No FULL branch —
+// both builds run the same 13 asserts.
+{
+  let fa = ops.addFolder(normalize(null), undefined, 'Top', 't')
+  fa = ops.addFolder(fa, 't', 'Mid', 'm')
+  fa = ops.addFolder(fa, 'm', 'Leaf', 'l')
+  fa = ops.addFolder(fa, undefined, 'Unrelated', 'u')
+  fa = ops.addFolder(fa, undefined, 'Distinct', 'w')
+  for (const [sid, fid] of [['r1', 'l'], ['r2', 'l'], ['r3', 'm'], ['r4', 'l'], ['r7', 'u'], ['r8', 'w']]) fa = ops.placeSession(fa, sid, fid)
+  const faGhost = { ...fa, placed: { ...fa.placed, r6: 'ghost' } }
+  const r1 = { id: 'r1', unread: true }
+  const r2 = { id: 'r2', is_active: true }
+  const r3 = { id: 'r3', unread: true, is_active: true }
+  const r4 = { id: 'r4' }
+  const r5 = { id: 'r5', unread: true }
+  const r6 = { id: 'r6', unread: true }
+  const r7 = { id: 'r7', unread: true }
+  const r8 = { id: 'r8', is_active: true }
+  const act = folderActivity(faGhost, [r1, r2, r3, r4, r5, r6, r7, r8])
+  assert(act.get('l').unread === 1 && act.get('l').active === true,
+    'folderActivity: unread-only + active-only siblings in one folder combine to unread 1, active true — the activeness latch never inflates the count')
+  assert(act.get('m').unread === 2 && act.get('m').active === true,
+    'folderActivity: a folder merges its own placement (r3) with descendant counts (r1,r2): unread 2, active true')
+  assert(act.get('t').unread === 2 && act.get('t').active === true,
+    'folderActivity: counts propagate the FULL ancestor chain — the root Top sees the same unread 2 / active true')
+  assert(act.get('u').unread === 1 && act.get('u').active === false,
+    'folderActivity: a folder holding only unread rows never reports active')
+  assert(act.get('w').unread === 0 && act.get('w').active === true,
+    'folderActivity: a folder holding only active rows never fabricates an unread count')
+  assert(act.size === 5,
+    'folderActivity: exactly the five attributable folders have entries — flagless r4, Unsorted r5 and stale placement r6 add nothing')
+  assert(Object.keys(act.get('l')).sort().join() === 'active,unread',
+    'folderActivity: entries are exactly {unread, active} — no third slot, no count-of-rows leak')
+  assert(folderActivity(faGhost, [r4]).size === 0,
+    'folderActivity: a row that is neither unread nor active is skipped entirely')
+  assert(folderActivity(faGhost, [r5]).size === 0,
+    'folderActivity: an unread chat in Unsorted counts toward no folder')
+  assert(folderActivity(faGhost, [r6]).size === 0,
+    'folderActivity: a placement pointing at a gone folder is skipped, not crashed (stale export shape)')
+  assert(folderActivity(faGhost, null).size === 0 && folderActivity(faGhost, undefined).size === 0,
+    'folderActivity: null and undefined rows both read as empty (the rows || [] guard)')
+  assert(folderActivity(normalize(null), [r1, r3, r7]).size === 0,
+    'folderActivity: an empty tree attributes every placement to nothing — empty map, no throw')
+  const cyc = { folders: [{ id: 'x', parent: 'y' }, { id: 'y', parent: 'x' }], placed: { c1: 'x' }, order: [], collapsed: {} }
+  const cycAct = folderActivity(cyc, [{ id: 'c1', unread: true }])
+  assert(cycAct.size === 2 && cycAct.get('x').unread === 1 && cycAct.get('y').unread === 1,
+    'folderActivity: a forged parent cycle terminates at first revisit — x and y each count the row exactly once (est-vssmr class at the activity level)')
+}
+
+// ── orderRows: manual drag-rank + recency fallback (est-bfokq) ───────────────
+// The per-folder row orderer: Manual = the dragged order (unranked ones newest
+// first), 'recent' = newest activity first. Pins the recency ladder
+// (last_active || started_at || 0), the rank-before-recency precedence, order-
+// null degradation, mode strictness, copy-not-mutation, and tie stability. No
+// FULL branch — both builds run the same 11 asserts. (orderRows rides the
+// existing #12 destructure line.)
+{
+  const a = { id: 'a', last_active: 100 }
+  const b = { id: 'b', last_active: 300 }
+  const c = { id: 'c', started_at: 200 }
+  const d = { id: 'd' }
+  const list = [a, b, c, d]
+  const snap = JSON.stringify(list)
+  assert(orderRows(list, ['d', 'b'], 'recent').map(r => r.id).join() === 'b,c,a,d',
+    "orderRows recent: last_active desc with started_at fallback (c over a), missing timestamps last (d); the drag ledger is ignored")
+  assert(JSON.stringify(orderRows(list, null, 'recent')) === JSON.stringify(orderRows(list, ['d', 'b'], 'recent')),
+    'orderRows recent: identical output whether order is null or a full drag ledger — the recent path never consults ranks')
+  assert(orderRows(list, ['d', 'b'], undefined).map(r => r.id).join() === 'd,b,c,a',
+    'orderRows manual (undefined mode): ranked rows first in drag order, then unranked by recency desc (c 200 before a 100)')
+  assert(orderRows(list, ['d'], undefined).map(r => r.id).join() === 'd,b,c,a',
+    'orderRows manual: rank beats recency absolutely — dragged d (no timestamp) outranks b (last_active 300)')
+  assert(orderRows(list, ['ghost', 'd', 'b'], undefined).map(r => r.id).join() === 'd,b,c,a',
+    'orderRows manual: a stale id in the drag ledger is inert — output unchanged')
+  assert(orderRows(list, null, undefined).map(r => r.id).join() === 'b,c,a,d',
+    'orderRows manual with no order degrades to pure recency sort, no throw')
+  assert(JSON.stringify(orderRows(list, ['d'], 'recently')) === JSON.stringify(orderRows(list, ['d'], '')),
+    "orderRows: mode is compared strictly to 'recent' — lookalike and empty strings both take the manual path")
+  assert(JSON.stringify(list) === snap,
+    'orderRows: the input array is never mutated (sorted copy returned)')
+  const t1 = { id: 't1', last_active: 50 }
+  const t2 = { id: 't2', last_active: 50 }
+  assert(orderRows([t1, t2], [], undefined).map(r => r.id).join() === 't1,t2',
+    'orderRows: equal recency keeps input order (stable sort) — t1 in before t2 stays first')
+  assert(orderRows([], ['x'], 'recent').length === 0 && orderRows([], ['x'], undefined).length === 0,
+    'orderRows: empty list returns empty in both modes')
+  const one = [a]
+  assert(orderRows(one, [], undefined)[0] === a,
+    'orderRows: a single row passes through by identity inside the fresh array')
+}
+
 // ── #13 review: Collapse all under a filter (F1), Open all = visible rows (F2) ──
 const { collapseAllItem, chatsBeneath, visibleRows } = mod
 let collapsed = 0
