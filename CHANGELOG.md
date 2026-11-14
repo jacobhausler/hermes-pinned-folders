@@ -5,6 +5,13 @@ All notable changes to this plugin. Versions follow `plugin.yaml`; each release 
 
 ## Unreleased
 
+## [0.1.14] - 2026-11-14
+
+Test-gain release: the shipped bundle is byte-identical to `v0.1.13` (`node
+scripts/build.mjs` rebuild is byte-identical at this head; `desktop/plugin.js`
+and `full/plugin.js` unchanged). No behavior change. Gates at this release:
+suite 312 ok catalog / 340 ok full, 0 failures, `hermes plugins validate` clean.
+
 ### Gates
 - sdk-contract now resolves every `host.<path>` full/plugin.js dereferences (9 at main tip; depth-1 `key:`, bare shorthand, ONE inline nested object, ONE named-reference hop through the relative import; comments blanked before key scanning; plain `export * from` trusts the surface) against the checkout's `host` literal — miss prints `host-drift: MISSING <path>`, exit 1; five fake-checkout legs pin the four shapes plus the negative hop, every positive fixture carries the whole surface (16 asserts, both builds, +16 ok → 262/290) (6701924, #87, @jacobhausler)
 
@@ -212,6 +219,7 @@ which uses only the SDK.
 - repo-admin standard: path-scoped CI `gates` check, CONTRIBUTING with the review
   checklist, PR template (#2, @jacobhausler)
 
+[0.1.14]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.14
 [0.1.13]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.13
 [0.1.12]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.12
 [0.1.11]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.11
