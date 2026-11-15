@@ -22,7 +22,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  HERMES_PIN: "71d34bad1045610252eda02ee79549436896e784"   # v0.21.7
+  HERMES_PIN: "3b421578588243f920886e6fe79a6faa87ea026e"   # v0.23.1
 
 jobs:
   gates:
