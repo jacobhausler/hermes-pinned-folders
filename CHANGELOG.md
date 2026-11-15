@@ -4,6 +4,9 @@ All notable changes to this plugin. Versions follow `plugin.yaml`; each release 
 `vX.Y.Z` tag and a catalog entry pinned to that tag's commit.
 
 ## Unreleased
+### Gates
+- CI repin `HERMES_PIN` v0.21.7 → v0.23.1 + `uv pip install --override` (derived from the pin's `[tool.uv]` block) for the floor install — plain pip cannot resolve the v0.23.x Pillow mask (browser-harness 0.1.13 pins pillow==12.3.0); repo contract gate green at the new pin (`sdk-contract.mjs`: 28 imports + 9 host paths at 3b421578); CI ledger at this head is the measured: row (6ee7e6c, #93, @jacobhausler)
+
 
 ## [0.1.14] - 2026-11-14
 

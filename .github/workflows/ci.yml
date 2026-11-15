@@ -22,7 +22,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  HERMES_PIN: "71d34bad1045610252eda02ee79549436896e784"   # v0.21.7
+  HERMES_PIN: "3b421578588243f920886e6fe79a6faa87ea026e"   # v0.23.1
 
 jobs:
   gates:
@@ -66,15 +66,32 @@ jobs:
         with:
           python-version: "3.14"
 
+      - uses: astral-sh/setup-uv@v6
+        if: steps.cls.outputs.docs_only == 'false'
+
       # The floor contract, installed FIRST: tests that import real core (hermes_constants,
       # the quiet-turn-report file, /opt/hermes shims) run against the pinned release, not
       # a stub. `/opt/hermes` mirrors the seat layout some tests sys.path-insert.
+      # Plain pip cannot resolve the v0.23.x pins: the core masks Pillow==13.0.0
+      # (py>=3.14) while its browser-harness==0.1.13 dep pins pillow==12.3.0 exactly,
+      # and upstream's antidote lives in [tool.uv].override-dependencies — which
+      # installing hermes-agent as an -e requirement IGNORES (unsatisfiable: the
+      # pip-resolution red the peer lane named on this PR). Derive the override file
+      # from the checked-out upstream pyproject at runtime (self-heals as upstream
+      # edits its [tool.uv] block); same recipe hermes-rich-ui's compat-latest job
+      # runs green at v0.23.0+.
       - name: Install pinned hermes-agent (the measured floor)
         if: steps.cls.outputs.docs_only == 'false'
         run: |
           git clone --filter=blob:none --quiet https://github.com/NousResearch/hermes-agent /tmp/hermes-agent
           git -C /tmp/hermes-agent checkout --quiet "$HERMES_PIN"
-          pip install --quiet -e /tmp/hermes-agent
+          python - <<'PY'
+          import tomllib
+          data = tomllib.load(open('/tmp/hermes-agent/pyproject.toml', 'rb'))
+          ovr = data.get('tool', {}).get('uv', {}).get('override-dependencies', [])
+          open('/tmp/hermes-overrides.txt', 'w').write(chr(10).join(ovr) + chr(10))
+          PY
+          uv pip install --system --quiet -e /tmp/hermes-agent --override /tmp/hermes-overrides.txt
           sudo ln -sfn /tmp/hermes-agent /opt/hermes
           hermes --version
 
