@@ -7,6 +7,9 @@ All notable changes to this plugin. Versions follow `plugin.yaml`; each release 
 ### Gates
 - CI repin `HERMES_PIN` v0.21.7 → v0.23.1 + `uv pip install --override` (derived from the pin's `[tool.uv]` block) for the floor install — plain pip cannot resolve the v0.23.x Pillow mask (browser-harness 0.1.13 pins pillow==12.3.0); repo contract gate green at the new pin (`sdk-contract.mjs`: 28 imports + 9 host paths at 3b421578); CI ledger at this head is the measured: row (6ee7e6c, #93, @jacobhausler)
 
+### Tests
+- pin `ops.placeFolder` into/refuse/parent-inherit + `ops.forgetSession` halves + `ops.setColor` coercion/clear — `'into'` lands byte-identical to the plain reparent (goes last among siblings, target collapsed key cleared, unrelated collapses kept), all four same-ref refuses (self, unknown id, unknown target, both) return the SAME state ref, `'after'` a nested folder inherits the target's parent and a legacy parentless root target normalizes to `null` JSON round-trip byte-equal (no key drift), `forgetSession` early-refuses an unknown sid with the same ref and each removal half keeps the counterpart byte-identical (order-only ⟂ placed-only), numeric/boolean colors stringified on entry (`7 → "7"`, `true → "true"`; `importLayout` drops the same junk — pinned separately, both coexist), empty-string color deletes the key like `null` (live swatch re-click) (16 asserts, both builds, +16 ok → 328/356) (6a849d5, #94, @jacobhausler)
+
 
 ## [0.1.14] - 2026-11-14
 
