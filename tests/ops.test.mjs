@@ -429,6 +429,51 @@ assert(c.folders[0].color === 'hsl(30 70% 55%)', 'set folder color')
 c = ops.setColor(c, 'w', null)
 assert(!('color' in c.folders[0]), 'clear folder color back to default')
 
+// ── placeFolder / forgetSession / setColor live edges (est-tenh7): the 'into'
+// delegation, the same-ref refuses, beside-placement parent inheritance incl.
+// legacy undefined→null, the forgetSession halves, String() coercion, and the
+// empty-string clear (the live swatch re-click path). Shared: both builds.
+{
+  const J = s => JSON.stringify(s)
+  let P = normalize(null)
+  P = ops.addFolder(P, null, 'A', 'a'); P = ops.addFolder(P, 'a', 'A1', 'a1')
+  P = ops.addFolder(P, 'a', 'A2', 'a2'); P = ops.addFolder(P, null, 'B', 'b')
+  P = ops.toggle(ops.toggle(P, 'b'), 'a2') // collapse the drop target and an unrelated folder
+  const into = ops.placeFolder(P, 'a1', 'b', 'into')
+  assert(J(into) === J(ops.moveFolder(P, 'a1', 'b')), "dropping 'into' a folder lands byte-identical to the plain reparent")
+  assert(into.folders.at(-1).id === 'a1' && into.folders.at(-1).parent === 'b',
+    "'into' reparents under the target and sends the folder last among all siblings")
+  assert(!('b' in into.collapsed) && into.collapsed.a2 === true, "'into' opens the dropped-into folder and keeps unrelated collapses")
+  assert(ops.placeFolder(P, 'b', 'b', 'before') === P, 'dropping a folder onto itself is refused with the same state ref')
+  assert(ops.placeFolder(P, 'ghost', 'b', 'after') === P, 'unknown moving id refused with the same ref')
+  assert(ops.placeFolder(P, 'a', 'ghost', 'after') === P, 'unknown target id refused with the same ref')
+  assert(ops.placeFolder(P, 'ghost', 'gone', 'before') === P, 'unknown on both sides refused with the same ref')
+  const besideNested = ops.placeFolder(P, 'b', 'a2', 'after')
+  assert(besideNested.folders.at(-1).id === 'b' && besideNested.folders.at(-1).parent === 'a',
+    "'after' a nested folder takes that folder's parent — sibling of the target, never a new root")
+  const legacy = { ...P, folders: P.folders.map(f => (f.id === 'b' ? { id: 'b', name: 'B' } : f)) }
+  const toLegacyRoot = ops.placeFolder(legacy, 'a1', 'b', 'before')
+  const movedLegacy = toLegacyRoot.folders.find(f => f.id === 'a1')
+  assert('parent' in movedLegacy && movedLegacy.parent === null,
+    'beside a legacy root target with no parent key the placement normalizes parent to null, not undefined')
+  assert(J(JSON.parse(J(toLegacyRoot))) === J(toLegacyRoot), 'the normalized placement is byte-equal across a save/reload round-trip (no key drift)')
+  const orderOnly = ops.placeSession(P, 'y', null) // order-only: pushed to order, no placement
+  const fo = ops.forgetSession(orderOnly, 'y')
+  assert(orderOnly.order.includes('y') && !('y' in orderOnly.placed)
+    && !fo.order.includes('y') && J(fo.placed) === J(orderOnly.placed),
+    'forgetting an order-only sid drops it from order with placed byte-identical')
+  const placedOnly = { ...P, placed: { ...P.placed, z: 'a' }, order: ['q'] }
+  const fp = ops.forgetSession(placedOnly, 'z')
+  assert(!('z' in fp.placed) && J(fp.order) === J(placedOnly.order),
+    'forgetting a placed-only sid drops it from placed with order byte-identical')
+  assert(ops.forgetSession(fp, 'ghost') === fp, 'forgetting a sid in neither half is refused with the same ref')
+  const tone = ops.setColor(ops.setColor(toLegacyRoot, 'a', 7), 'a2', true)
+  assert(tone.folders.find(f => f.id === 'a').color === '7', 'a numeric color is stringified on the way in (7 -> "7")')
+  assert(tone.folders.find(f => f.id === 'a2').color === 'true', 'a boolean color stringifies too (true -> "true") — importLayout drops the same junk instead')
+  assert(!('color' in ops.setColor(tone, 'a', '').folders.find(f => f.id === 'a')),
+    'empty-string color deletes the key — the swatch re-click clears back to default')
+}
+
 // ── activity on collapsed folders (rolls up through ancestors) ──
 let A = normalize(null)
 A = ops.addFolder(A, null, 'Top', 'top'); A = ops.addFolder(A, 'top', 'Mid', 'mid'); A = ops.addFolder(A, null, 'Quiet', 'q')
