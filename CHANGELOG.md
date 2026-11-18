@@ -4,8 +4,17 @@ All notable changes to this plugin. Versions follow `plugin.yaml`; each release 
 `vX.Y.Z` tag and a catalog entry pinned to that tag's commit.
 
 ## Unreleased
+
+## [0.1.15] - 2026-11-18
+
+Test-gain release: the shipped bundle is byte-identical to `v0.1.14` (`node
+scripts/build.mjs` rebuild is byte-identical at this head; `desktop/plugin.js`
+and `full/plugin.js` unchanged). No behavior change. Gates at this release:
+suite 328 ok catalog / 356 ok full, 0 failures, `hermes plugins validate` clean.
+
 ### Gates
 - CI repin `HERMES_PIN` v0.21.7 → v0.23.1 + `uv pip install --override` (derived from the pin's `[tool.uv]` block) for the floor install — plain pip cannot resolve the v0.23.x Pillow mask (browser-harness 0.1.13 pins pillow==12.3.0); repo contract gate green at the new pin (`sdk-contract.mjs`: 28 imports + 9 host paths at 3b421578); CI ledger at this head is the measured: row (6ee7e6c, #93, @jacobhausler)
+- CI repin `HERMES_PIN` v0.23.1 → v0.23.2 (ae2a81cc): nightly drift precheck found the SDK surface moved between the tags — additive only (new `ProfilesCreateResult` type export + one reworded comment; zero consumed names removed); contract re-proved at the new pin (`sdk-contract.mjs`: 28 imports + 9 host paths OK at ae2a81cc); CI ledger at this head is the measured: row
 
 ### Tests
 - pin `ops.placeFolder` into/refuse/parent-inherit + `ops.forgetSession` halves + `ops.setColor` coercion/clear — `'into'` lands byte-identical to the plain reparent (goes last among siblings, target collapsed key cleared, unrelated collapses kept), all four same-ref refuses (self, unknown id, unknown target, both) return the SAME state ref, `'after'` a nested folder inherits the target's parent and a legacy parentless root target normalizes to `null` JSON round-trip byte-equal (no key drift), `forgetSession` early-refuses an unknown sid with the same ref and each removal half keeps the counterpart byte-identical (order-only ⟂ placed-only), numeric/boolean colors stringified on entry (`7 → "7"`, `true → "true"`; `importLayout` drops the same junk — pinned separately, both coexist), empty-string color deletes the key like `null` (live swatch re-click) (16 asserts, both builds, +16 ok → 328/356) (6a849d5, #94, @jacobhausler)
@@ -225,6 +234,7 @@ which uses only the SDK.
 - repo-admin standard: path-scoped CI `gates` check, CONTRIBUTING with the review
   checklist, PR template (#2, @jacobhausler)
 
+[0.1.15]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.15
 [0.1.14]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.14
 [0.1.13]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.13
 [0.1.12]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.12
