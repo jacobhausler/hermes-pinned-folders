@@ -72,6 +72,21 @@ let u = ops.placeSession(ops.addFolder({ folders: [], placed: {}, order: [], col
 u = ops.forgetSession(u, 'x')
 assert(!('x' in u.placed) && !u.order.includes('x'), 'unpin forgets placement')
 
+// IDLE-DRIVE est-x6vn3 sweep-c: normalize passes a junk-valued placed{} through
+// untouched — folderOf is the last gate, and it must degrade every malformed
+// placement value to ROOT (Unsorted), never surface a phantom id. The
+// importLayout-side junk filtering pinned in #94 runs separately; both coexist.
+{
+  const junk = { s_ok: 'a', s_num: 42, s_true: true, s_obj: {}, s_arr: [], s_empty: '' }
+  const nt = normalize({ folders: [{ id: 'a', name: 'a', parent: null }], placed: junk, order: [], collapsed: {} })
+  const ids = new Set(nt.folders.map(f => f.id))
+  assert(JSON.stringify(nt.placed) === JSON.stringify(junk), 'normalize passes a junk placed{} through byte-identical (folderOf is the last gate)')
+  assert(folderOf(nt, ids, 's_ok') === 'a', 'folderOf: valid placement survives normalize')
+  for (const [sid, shape] of [['s_num', 'number'], ['s_true', 'boolean'], ['s_obj', 'object'], ['s_arr', 'array'], ['s_empty', 'empty string']]) {
+    assert(folderOf(nt, ids, sid) === null, `folderOf: ${shape} placement value degrades to ROOT (null), never a phantom id`)
+  }
+}
+
 if (FULL) {
   const { scrubCorePins, isFreshUserChat, autoPinNext, pinAndJudge } = mod
   const mem = new Map([

@@ -5,6 +5,9 @@ All notable changes to this plugin. Versions follow `plugin.yaml`; each release 
 
 ## Unreleased
 
+### Tests
+- pin `folderOf` malformed-placement degradation + `normalize` placed{} passthrough — a junk-valued `placed{}` (`42`, `true`, `{}`, `[]`, `''`) survives `normalize` byte-identical (`folderOf` is the last gate; the `importLayout`-side junk filtering pinned in #94 drops the same junk — pinned separately, both coexist), a valid placement survives normalization and resolves to its folder, and every malformed placement value degrades to ROOT/Unsorted — never a phantom id (est-x6vn3 sweep-c) (7 asserts, both builds, +7 ok → 335/363)
+
 ## [0.1.15] - 2026-11-18
 
 Test-gain release: the shipped bundle is byte-identical to `v0.1.14` (`node
