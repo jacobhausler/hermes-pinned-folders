@@ -5,6 +5,9 @@ All notable changes to this plugin. Versions follow `plugin.yaml`; each release 
 
 ## Unreleased
 
+### Gates
+- CI repin `HERMES_PIN` v0.23.2 → v0.23.3 (caafe538): nightly drift precheck found the SDK surface moved between the tags — additive only (new `ComposerSessionInfo` type + `useComposerSession` re-export in `apps/desktop/src/sdk/areas.ts`; zero consumed names removed); contract re-proved at the new pin (`sdk-contract.mjs`: 28 imports + 9 host paths OK at caafe5389a; same gate green at the old pin ae2a81cc for the delta census); CI ledger at this head is the measured: (est-dmxxq)
+
 ### Tests
 - pin `folderOf` malformed-placement degradation + `normalize` placed{} passthrough — a junk-valued `placed{}` (`42`, `true`, `{}`, `[]`, `''`) survives `normalize` byte-identical (`folderOf` is the last gate; the `importLayout`-side junk filtering pinned in #94 drops the same junk — pinned separately, both coexist), a valid placement survives normalization and resolves to its folder, and every malformed placement value degrades to ROOT/Unsorted — never a phantom id (est-x6vn3 sweep-c) (7 asserts, both builds, +7 ok → 335/363)
 
