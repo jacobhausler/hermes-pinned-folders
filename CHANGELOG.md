@@ -10,6 +10,7 @@ All notable changes to this plugin. Versions follow `plugin.yaml`; each release 
 
 ### Tests
 - pin `folderOf` malformed-placement degradation + `normalize` placed{} passthrough — a junk-valued `placed{}` (`42`, `true`, `{}`, `[]`, `''`) survives `normalize` byte-identical (`folderOf` is the last gate; the `importLayout`-side junk filtering pinned in #94 drops the same junk — pinned separately, both coexist), a valid placement survives normalization and resolves to its folder, and every malformed placement value degrades to ROOT/Unsorted — never a phantom id (est-x6vn3 sweep-c) (7 asserts, both builds, +7 ok → 335/363)
+- pin `ancestorsOf` forged-cycle + self-parent degradation and `isDescendant` unknown-id fallback — a forged parent cycle returns each visited folder exactly once (the visited-set break, not a duplicated run), self-parent yields `[self]`, an unknown id is nobody's descendant; complements the `isDescendant` hop-cap cycle pin above — the two tree helpers guard cycles by DIFFERENT mechanisms and both must stay pinned (est-64j8t sweep-c) (3 asserts, both builds, +3 ok → 338/366)
 
 ## [0.1.15] - 2026-11-18
 
