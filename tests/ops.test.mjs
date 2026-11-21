@@ -61,6 +61,11 @@ assert(plugin.id === 'pinned-folders' && typeof plugin.register === 'function', 
   assert(isDescendant(th, 'a', 'c') === false, 'isDescendant ancestor -> descendant is false')
   const cyc = { folders: [{ id: 'a', name: 'a', parent: 'c' }, { id: 'c', name: 'c', parent: 'a' }], placed: {}, order: [], collapsed: {} }
   assert(isDescendant(cyc, 'a', 'zz') === false, 'isDescendant terminates on forged parent cycle a->c->a (hop cap), returns false')
+  const cyc2 = new Map([['a', { id: 'a', name: 'a', parent: 'c' }], ['c', { id: 'c', name: 'c', parent: 'a' }]])
+  assert(ancestorsOf(cyc2, 'a').map(f => f.id).join() === 'a,c', 'ancestorsOf forged cycle a->c->a visits each folder exactly once (seen-set break), never a duplicated run')
+  const selfParent = new Map([['a', { id: 'a', name: 'a', parent: 'a' }]])
+  assert(ancestorsOf(selfParent, 'a').map(f => f.id).join() === 'a', 'ancestorsOf self-parent returns just [self]')
+  assert(isDescendant(th, 'nope', 'a') === false, 'isDescendant unknown id is not a descendant of anything')
   const tp = ops.placeSession(ops.placeSession(th, 's1', 'b'), 's2', 'ghost-folder')
   const ids = new Set(tp.folders.map(f => f.id))
   assert(folderOf(tp, ids, 's1') === 'b', 'folderOf returns the placed folder id')
