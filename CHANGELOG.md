@@ -4,6 +4,9 @@ All notable changes to this plugin. Versions follow `plugin.yaml`; each release 
 `vX.Y.Z` tag and a catalog entry pinned to that tag's commit.
 
 ## Unreleased
+## [0.1.16] - 2026-11-22
+
+Test-gain release: the shipped bundle is byte-identical to `v0.1.15` (`node scripts/build.mjs` rebuild is byte-identical at this head; `desktop/plugin.js` and `full/plugin.js` unchanged). No behavior change. Gates at this release: suite 338 ok catalog / 366 ok full, 0 failures, `hermes plugins validate` clean (rc=0).
 
 ### Gates
 - CI repin `HERMES_PIN` v0.23.2 → v0.23.3 (caafe538): nightly drift precheck found the SDK surface moved between the tags — additive only (new `ComposerSessionInfo` type + `useComposerSession` re-export in `apps/desktop/src/sdk/areas.ts`; zero consumed names removed); contract re-proved at the new pin (`sdk-contract.mjs`: 28 imports + 9 host paths OK at caafe5389a; same gate green at the old pin ae2a81cc for the delta census); CI ledger at this head is the measured: (est-dmxxq)
@@ -241,6 +244,7 @@ which uses only the SDK.
 - repo-admin standard: path-scoped CI `gates` check, CONTRIBUTING with the review
   checklist, PR template (#2, @jacobhausler)
 
+[0.1.16]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.16
 [0.1.15]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.15
 [0.1.14]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.14
 [0.1.13]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.13
