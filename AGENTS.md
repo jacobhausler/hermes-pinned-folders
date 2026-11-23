@@ -35,7 +35,7 @@ A change is done when all six pass (including `node tests/build.test.mjs`) and `
 [graphify](https://github.com/Graphify-Labs/graphify) turns the repo into a queryable graph. It uses a local parse, no LLM and no API key, and needs [uv](https://docs.astral.sh/uv/):
 
 ```sh
-uvx --from graphifyy graphify update .         # → "Rebuilt: ~100 nodes, ~160 edges", about 2 s
+uvx --from graphifyy graphify update .         # → "Rebuilt: ~320 nodes, ~490 edges", about 2 s
 uvx --from graphifyy graphify query "how does unpin work"
 ```
 
