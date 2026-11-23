@@ -4,6 +4,10 @@ All notable changes to this plugin. Versions follow `plugin.yaml`; each release 
 `vX.Y.Z` tag and a catalog entry pinned to that tag's commit.
 
 ## Unreleased
+
+### Docs
+- AGENTS.md code-graph line: measured rebuild scale at `v0.1.16` tip is 322 nodes / 490 edges / 16 communities (the ~100/~160 figures predate the test battery) — pf#100 (est-nyynf)
+
 ## [0.1.16] - 2026-11-22
 
 Test-gain release: the shipped bundle is byte-identical to `v0.1.15` (`node scripts/build.mjs` rebuild is byte-identical at this head; `desktop/plugin.js` and `full/plugin.js` unchanged). No behavior change. Gates at this release: suite 338 ok catalog / 366 ok full, 0 failures, `hermes plugins validate` clean (rc=0).
