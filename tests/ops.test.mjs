@@ -1370,3 +1370,50 @@ if (FULL) {
     menuChildren(MIX, KIT).map(e => e.key).join() === 'sep0,sw1,h2,m3',
     'menuChildren keys: kind-tagged and positional (sep/sw/h/m + index), identical across repeated calls')
 }
+// ── hide-core DOM contract via the register seam (est-rwgtw, sweep-c) ──────────
+// corePinnedGroups/syncHidden/applyHideCore are module-private: their ONLY door is
+// plugin.register (applyHideCore(store.get('hideCore', true))) and its onDispose.
+// The shared stub at the register block above hides nothing (querySelectorAll -> []);
+// this block swaps in a fake sidebar group list and pins exactly where display:none lands.
+if (FULL) {
+  const grp = (label, inPanes = false) => ({
+    style: {}, isConnected: true,
+    closest: s => (inPanes ? {} : null),
+    firstElementChild: { querySelector: s => (s === 'span.truncate' ? { textContent: label } : null) }
+  })
+  const gs = [grp('Pinned'), grp('  PINNED '), grp('Pinned', true), grp('Sessions')]
+  globalThis.document = { hidden: false, body: { tag: 'body' },
+    // like the real DOM, a detached group drops out of querySelectorAll
+    querySelectorAll: s => (s === '[data-sidebar="group"]' ? gs.filter(x => x.isConnected) : []) }
+  let moCb = null, observed = null, disconnected = 0
+  globalThis.MutationObserver = class {
+    constructor(cb) { moCb = cb }
+    observe(t, opts) { observed = { t, opts } }
+    disconnect() { disconnected++ }
+  }
+  const mem2 = new Map()
+  const ctx2 = {
+    storage: { get: (k, d) => (mem2.has(k) ? mem2.get(k) : d), set: (k, v) => mem2.set(k, v), remove: k => mem2.delete(k) },
+    os: { writeText: () => {} }, register: () => {}, onDispose: fn => (disposed2.push(fn), () => {})
+  }
+  const disposed2 = []
+  plugin.register(ctx2)
+  assert(gs[0].style.display === 'none' && gs[1].style.display === 'none',
+    'cold register hides every core Pinned group, label matched trim+case-insensitively (translateNow stub falls back to "Pinned")')
+  assert(gs[2].style.display === undefined,
+    'a matching label inside our own [data-pinned-folders] pane is never hidden (closest guard beats the label check)')
+  assert(gs[3].style.display === undefined, 'non-matching group labels (Sessions) are untouched')
+  assert(observed && observed.t === globalThis.document.body && observed.opts.childList === true && observed.opts.subtree === true,
+    'applyHideCore(true) observes document.body with childList+subtree')
+  gs[0].isConnected = false
+  moCb()  // rAF stub above runs the callback synchronously -> syncHidden(true)
+  assert(gs[0].style.display === '' && gs[1].style.display === 'none',
+    'observer pass restores detached groups and keeps connected matches hidden')
+  disposed2.forEach(fn => fn())
+  assert(disconnected === 1 && !gs.some(x => x.style.display === 'none'),
+    'dispose disconnects the observer exactly once and leaves no group display:none')
+  mem2.set('hideCore', false)
+  plugin.register(ctx2)
+  assert(!gs.some(x => x.style.display === 'none'),
+    'hideCore=false in the store: cold register hides nothing (opt-out honored from day zero)')
+}

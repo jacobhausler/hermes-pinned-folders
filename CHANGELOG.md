@@ -5,6 +5,9 @@ All notable changes to this plugin. Versions follow `plugin.yaml`; each release 
 
 ## Unreleased
 
+### Tests
+- pin the hide-core DOM contract through its only door — `corePinnedGroups`/`syncHidden`/`applyHideCore` are module-private, reachable only via `plugin.register`; a fake sidebar group list pins exactly where `display:none` lands: trim+case-insensitive label match (translateNow-null falls back to "Pinned"), the `[data-pinned-folders]` `closest()` guard beats it, the observer watches `document.body` childList+subtree, the re-hide pass restores detached groups, dispose disconnects exactly once and leaves no group hidden, and a stored `hideCore:false` makes a cold re-register hide nothing (est-rwgtw sweep-c) (7 asserts, full build, +7 ok → 338/373)
+
 ### Docs
 - AGENTS.md code-graph line: measured rebuild scale at `v0.1.16` tip is 322 nodes / 490 edges / 16 communities (the ~100/~160 figures predate the test battery) — pf#100 (est-nyynf)
 
