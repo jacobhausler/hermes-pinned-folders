@@ -6,6 +6,7 @@ All notable changes to this plugin. Versions follow `plugin.yaml`; each release 
 ## Unreleased
 
 ### Tests
+- pin sibling-lineage tombstone semantics: the map stamps one timestamp per id, `tombstoned()` takes the max over a row's ids, and an expired read purges only the queried ids — with two chats sharing a lineage root, a sibling unpin re-stamps the shared root (an expired child still reads suppressed via the max), expiry rides the newest stamp (inclusive boundary via the root path), one row's purge never leaks into the sibling's own stamp, and re-pin through the default `pinRow` seam clears the row's tombstone instantly while the sibling stays suppressed (est-oka6o sweep-c) (5 asserts, full build, +5 ok → 338/378)
 - pin the hide-core DOM contract through its only door — `corePinnedGroups`/`syncHidden`/`applyHideCore` are module-private, reachable only via `plugin.register`; a fake sidebar group list pins exactly where `display:none` lands: trim+case-insensitive label match (translateNow-null falls back to "Pinned"), the `[data-pinned-folders]` `closest()` guard beats it, the observer watches `document.body` childList+subtree, the re-hide pass restores detached groups, dispose disconnects exactly once and leaves no group hidden, and a stored `hideCore:false` makes a cold re-register hide nothing (est-rwgtw sweep-c) (7 asserts, full build, +7 ok → 338/373)
 
 ### Docs

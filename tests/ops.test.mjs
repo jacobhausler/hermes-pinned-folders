@@ -245,6 +245,44 @@ if (FULL) {
     assert(tombstoned({ id: 't2' }, at + 30_000) === false, 't2 purge-on-read: after the expired read an earlier-now re-query reads false — entry deleted; pre-expiry it read true')
   }
 
+  // ── sibling-lineage tombstone semantics (full-only; est-oka6o) ──
+  // The map keeps ONE stamp per id, tombstoned() takes the max over the row's
+  // ids and an expired read purges ONLY the queried ids. Chats a and b share
+  // lineage root R, so their unpins interleave in time: a sibling unpin
+  // re-stamps the shared root (an expired child still reads suppressed via the
+  // max), expiry rides the newest stamp, a's purge must not leak into b's own
+  // stamp, and re-pin through the default pinRow seam must clear the row's
+  // tombstone while the sibling stays suppressed.
+  {
+    const tA = 1_700_000_100_000, tB = 1_700_000_130_000 // a's unpin is 30 s older than b's
+    const prevWin = globalThis.window, prevNow = Date.now
+    const linPatches = []
+    globalThis.window = { hermesDesktop: { api: async opts => { linPatches.push(opts) } }, localStorage: { length: 0, key: () => null, getItem: () => null, setItem: () => {} } }
+    try {
+      Date.now = () => tA
+      await mod.unpinPinnedRow({ id: 'a', _lineage_root_id: 'R', profile: 'p1' }, { sessions: {} })
+      Date.now = () => tB
+      await mod.unpinPinnedRow({ id: 'b', _lineage_root_id: 'R', profile: 'p1' }, { sessions: {} })
+      assert(tombstoned({ id: 'a', _lineage_root_id: 'R' }, tA + 61_000) === true,
+        'sibling unpin re-stamped the shared root: an expired child still reads tombstoned via max(per-id stamps)')
+      assert(tombstoned({ id: 'a', _lineage_root_id: 'R' }, tB + 60_000) === false,
+        'expiry rides the newest stamp: now == root+TOMBSTONE_MS reads false (inclusive boundary via the root path)')
+      assert(tombstoned({ id: 'b', _lineage_root_id: 'R' }, tB + 30_000) === true,
+        "a's purge-on-read deleted {a, R} but never b: the sibling is still tombstoned inside its own window")
+      Date.now = () => tB + 1_000
+      await mod.unpinPinnedRow({ id: 'a', _lineage_root_id: 'R', profile: 'p1' }, { sessions: {} }) // re-tombstone a
+      await mod.pinAndJudge({ id: 'a', _lineage_root_id: 'R', profile: 'p1' }, undefined, () => {})
+      assert(tombstoned({ id: 'a', _lineage_root_id: 'R' }, tB + 1_000) === false,
+        "re-pin through the default pinRow seam clears the row's own tombstone instantly")
+      assert(tombstoned({ id: 'b', _lineage_root_id: 'R' }, tB + 1_000) === true
+        && linPatches.length === 4 && linPatches.at(-1).body.pinned === true,
+        're-pin clears only a: b stays suppressed and the last PATCH carried pinned:true')
+    } finally {
+      Date.now = prevNow
+      if (prevWin) globalThis.window = prevWin; else delete globalThis.window
+    }
+  }
+
   // ── pinAndJudge seam edges (full-only). Drives the injectable seams of
   // pinAndJudge(row, pin, judge) — full/plugin.js: `await pin(row); judge(pinIdsOf(row))`;
   // pinIdsOf: `[row.id, row._lineage_root_id].filter(Boolean)` drops falsy slots. judge
