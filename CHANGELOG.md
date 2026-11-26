@@ -6,6 +6,7 @@ All notable changes to this plugin. Versions follow `plugin.yaml`; each release 
 ## Unreleased
 
 ### Tests
+- pin the `ops.resetView` detach/shape contract at the seam itself — fed a raw handoff tree (invalid choices, extra key, missing key, and no `.view` at all), the block pins: fresh object never aliasing the frozen `DEFAULT_VIEW` nor the old view; invalid/extra/missing keys collapsing to the exact canonical shape; twice-equals-once idempotence on a fresh copy; the handed tree left un-mutated; a view-less tree resetting cleanly; and the returned view being writable-and-detached (mutating it cannot leak into the shared default). Both builds green (est-njkvc sweep-c, +6 ok in both; see AGENTS.md line for the measured totals)
 - pin the hide-core DOM contract through its only door — `corePinnedGroups`/`syncHidden`/`applyHideCore` are module-private, reachable only via `plugin.register`; a fake sidebar group list pins exactly where `display:none` lands: trim+case-insensitive label match (translateNow-null falls back to "Pinned"), the `[data-pinned-folders]` `closest()` guard beats it, the observer watches `document.body` childList+subtree, the re-hide pass restores detached groups, dispose disconnects exactly once and leaves no group hidden, and a stored `hideCore:false` makes a cold re-register hide nothing (est-rwgtw sweep-c) (7 asserts, full build, +7 ok → 338/373)
 
 ### Docs

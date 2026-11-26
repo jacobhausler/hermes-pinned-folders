@@ -741,6 +741,20 @@ const rs = ops.resetView(R)
 assert(JSON.stringify(rs.view) === JSON.stringify(DEFAULT_VIEW), 'reset view restores filter + ordering defaults')
 assert(JSON.stringify({ ...rs, view: 0 }) === JSON.stringify({ ...R, view: 0 }), 'reset view leaves folders, colors and layout alone')
 assert(JSON.stringify(normalize(JSON.parse(JSON.stringify(R))).view) === JSON.stringify(R.view), 'view state survives save/reload')
+// ── resetView contract (nightly sweep c, 11-26 / est-njkvc): copy-not-alias,
+// key collapse, idempotent, view-less tree. Feeds the raw handoff shape straight
+// into ops.resetView — the menu path can pre-normalize, the method must not assume it.
+{
+  const rawT = { ...normalize(null), view: { order: 'sideways', status: 42, bogus: 7 } }
+  const rv = ops.resetView(rawT)
+  assert(rv.view !== DEFAULT_VIEW && rv.view !== rawT.view, 'reset view returns a fresh object, never the frozen DEFAULT_VIEW or the old view')
+  assert(Object.keys(rv.view).length === Object.keys(DEFAULT_VIEW).length && Object.keys(DEFAULT_VIEW).every(k => rv.view[k] === DEFAULT_VIEW[k]), 'invalid values, extra keys and missing keys all collapse to the exact canonical shape')
+  assert(JSON.stringify(ops.resetView(rv)) === JSON.stringify(rv) && ops.resetView(rv).view !== rv.view, 'reset view twice equals reset once, always on a fresh copy (idempotent)')
+  assert(rawT.view.bogus === 7 && rawT.view.status === 42, 'reset view never mutates the tree it was handed')
+  assert(JSON.stringify(ops.resetView({ folders: [], placed: {}, collapsed: {}, order: [] }).view) === JSON.stringify(DEFAULT_VIEW), 'a handoff tree lacking .view resets cleanly')
+  rv.view.unreadOnly = true
+  assert(DEFAULT_VIEW.unreadOnly === false, 'the reset view is writable and detached: mutating it cannot leak into the shared default')
+}
 const C = ops.collapseAll(ops.addFolder(V, 'w', 'Sub', 'sub'))
 assert(C.collapsed.w && C.collapsed.sub && C.collapsed.__unsorted, 'collapse all closes every folder and Unsorted')
 
