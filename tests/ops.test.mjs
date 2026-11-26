@@ -1455,3 +1455,35 @@ if (FULL) {
   assert(!gs.some(x => x.style.display === 'none'),
     'hideCore=false in the store: cold register hides nothing (opt-out honored from day zero)')
 }
+
+
+// ── ops.resetView detach + shape contract (both builds; est-njkvc) ──
+// 'Reset view' is the only door onto resetView. The block above #778 witnesses the
+// happy path and the untouched layout; unpinned here: the fresh view must be a COPY
+// (the exported DEFAULT_VIEW is frozen — an aliased return would freeze the live menu
+// state of every tree at the first spread-write), invalid and extra keys collapse to
+// exactly the default shape without a normalize pass (a pre-migration load may hand
+// resetView a dirty view), reset is idempotent, a tree saved before views existed
+// gains the default view, and only .view moves.
+{
+  const RT = ops.addFolder(normalize(null), null, 'W', 'w')
+  const dirty = { ...RT, view: { order: 'sideways', bogus: 7 } }
+  const rv = ops.resetView(dirty)
+  assert(rv.view !== DEFAULT_VIEW, 'reset returns a copy, not the exported frozen DEFAULT_VIEW')
+  assert(rv.view !== dirty.view, 'reset returns a fresh object, never the old view')
+  assert(JSON.stringify(rv.view) === JSON.stringify(DEFAULT_VIEW),
+    'reset collapses invalid values and EXTRA keys to exactly the default shape')
+  const leaky = rv.view
+  leaky.order = 'recent'
+  assert(DEFAULT_VIEW.order === 'manual' && JSON.stringify(ops.resetView(RT).view) === JSON.stringify(DEFAULT_VIEW),
+    'mutating a reset result cannot leak into the exported DEFAULT_VIEW or into later resets')
+  assert(JSON.stringify(ops.resetView(rv).view) === JSON.stringify(DEFAULT_VIEW),
+    'reset is idempotent: resetting a reset view changes nothing')
+  const noView = ops.resetView({ ...RT })
+  delete noView.view
+  assert(JSON.stringify(ops.resetView(noView).view) === JSON.stringify(DEFAULT_VIEW),
+    'reset materializes the default view on a tree saved before views existed')
+  const shaped = ops.resetView(dirty)
+  assert(JSON.stringify({ ...shaped, view: 0 }) === JSON.stringify({ ...dirty, view: 0 }),
+    'reset moves only .view — folders, placement, order and collapse keys byte-identical')
+}
