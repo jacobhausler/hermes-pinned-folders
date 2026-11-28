@@ -5,6 +5,10 @@ All notable changes to this plugin. Versions follow `plugin.yaml`; each release 
 
 ## Unreleased
 
+## [0.1.17] - 2026-11-28
+
+Test-gain + CI-repin release: the shipped bundle is byte-identical to `v0.1.16` (`node scripts/build.mjs` rebuild is byte-identical at this head; `desktop/plugin.js` and `full/plugin.js` unchanged since the `v0.1.16` tag). No behavior change. Gates at this release: suite 345 ok catalog / 385 ok full, 0 failures, `node tests/build.test.mjs` 10 ok, `hermes plugins validate` clean (rc=0), CI `gates` + `pr-compliance` green at the exact head.
+
 ### Gates
 - CI repin `HERMES_PIN` v0.23.3 → v0.23.5 (a428f534): nightly drift precheck found the SDK surface moved between the tags — `index.ts` + re-export areas changed (−14 lines at v0.23.4→v0.23.5), zero consumed names removed; contract re-proved at the new pin (`sdk-contract.mjs`: 28 imports + 9 host paths OK at a428f5344f) (est-f5ktg)
 
@@ -256,6 +260,7 @@ which uses only the SDK.
 - repo-admin standard: path-scoped CI `gates` check, CONTRIBUTING with the review
   checklist, PR template (#2, @jacobhausler)
 
+[0.1.17]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.17
 [0.1.16]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.16
 [0.1.15]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.15
 [0.1.14]: https://github.com/jacobhausler/hermes-pinned-folders/releases/tag/v0.1.14
