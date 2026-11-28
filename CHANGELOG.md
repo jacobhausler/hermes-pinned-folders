@@ -5,6 +5,9 @@ All notable changes to this plugin. Versions follow `plugin.yaml`; each release 
 
 ## Unreleased
 
+### Gates
+- CI repin `HERMES_PIN` v0.23.3 → v0.23.5 (a428f534): nightly drift precheck found the SDK surface moved between the tags — `index.ts` + re-export areas changed (−14 lines at v0.23.4→v0.23.5), zero consumed names removed; contract re-proved at the new pin (`sdk-contract.mjs`: 28 imports + 9 host paths OK at a428f5344f) (est-f5ktg)
+
 ### Tests
 - pin `ops.resetView` detach + shape contract — the fresh view is a COPY (never the exported frozen `DEFAULT_VIEW`; mutating a reset result cannot leak), invalid and EXTRA keys collapse to exactly the default shape without a normalize pass, reset is idempotent, a tree saved before views existed gains the default view, and only `.view` moves while folders/placement/order/collapse stay byte-identical (est-njkvc sweep-c) (7 asserts, both builds, +7 ok → 345/385)
 - pin sibling-lineage tombstone semantics: the map stamps one timestamp per id, `tombstoned()` takes the max over a row's ids, and an expired read purges only the queried ids — with two chats sharing a lineage root, a sibling unpin re-stamps the shared root (an expired child still reads suppressed via the max), expiry rides the newest stamp (inclusive boundary via the root path), one row's purge never leaks into the sibling's own stamp, and re-pin through the default `pinRow` seam clears the row's tombstone instantly while the sibling stays suppressed (est-oka6o sweep-c) (5 asserts, full build, +5 ok → 338/378)
